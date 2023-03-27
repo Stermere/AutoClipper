@@ -5,7 +5,9 @@ import numpy as np
 import seaborn as sns
 import sys
 
-STAT_INTERVAL = 10
+STAT_INTERVAL = 1
+
+# TODO the data is not guaranteed to be in 1 second intervals so graph by the time of each data point 
 
 def main():
     if (sys.argv.__len__() < 2):
