@@ -10,6 +10,7 @@ from twitch import TwitchClient
 import twitch
 from src.ClipGetter import ClipGetter
 import sys
+import os
 
 # app credentials (I should not hardcode this)
 APP_ID = 'lgsocblmqju7q5g2ipm9ixww1jwkbx'
@@ -42,5 +43,9 @@ async def main(argv):
     # now that we have the clips, we can hand it off to the video maker
     # TODO make the video maker
 
+    # delete the clips and temp folder
+    for dir_ in dirs:
+        os.remove(dir_)
+        
 if __name__ == '__main__':
     asyncio.run(main(sys.argv))
