@@ -16,14 +16,20 @@ import os
 
 # app credentials (I should not hardcode this)
 # TODO TODO - put this in a config file
-APP_ID = 'lgsocblmqju7q5g2ipm9ixww1jwkbx'
-APP_SECRET = 'ttyixaqh5gpuc9z8e2fl4qasb3uxot'
+
+# load the app credentials from a file named app_credentials.txt
+# first line the app id, second line the app secret
+
+with open('app_credentials.txt', 'r') as f:
+    APP_ID = f.readline().strip()
+    APP_SECRET = f.readline().strip()
+
 USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CLIPS_EDIT]
 TARGET_CHANNELS = ['miyune', 'vedal987', 'filian', 'shylily', 'moistcr1tikal', 'lirik', 'timthetatman', 'sykkuno', 'sinder', 'ironmouse', 'vei']
-STAT_INTERVAL = 10
+TIME_WINDOW = 10
+STAT_INTERVAL = 1
 
-LLM_STRING = 'Lets play a game! The above list is a set of twitch chats on a channel, these chats come from the previous 30 seconds of the stream. From that I need you to identify if the previous 30 seconds are a exiting part of the stream or not. You should be selective about what parts are exiting. You will reply with a yes if its is exiting and no otherwise, After the yes or no response you may write a Youtube video title that describes what happened during these chats. Please format your response in the following way: decision, Video title. You should ignore inappropriate chats and do not mention them as they are better off forgotten, also Do NOT reply with anything else!'
-
+# optional - print the chat messages to the console but delete them after a new message is received
 PRINT_CHAT = False
 
 # this is the main class that will handle the chat bot
@@ -32,7 +38,7 @@ class ChatClassifier:
     def __init__(self):
         self.chats = {}
         for channel in TARGET_CHANNELS:
-            self.chats[channel] = ChatStats(channel, STAT_INTERVAL)
+            self.chats[channel] = ChatStats(channel, time_window=TIME_WINDOW, stat_interval=STAT_INTERVAL)
         self.live_channels = []
 
         # we will store the twitch api instance, the authentication instance, the chat instance and the tokens here
@@ -145,7 +151,7 @@ class ChatClassifier:
                         break
                 # check if we found the user object
                 if user is None:
-                    print(f'\tFailed to find user object for {channel}')
+                    print(f'Failed to find user object for {channel}')
                     continue
 
                 # try to create a clip
@@ -153,16 +159,16 @@ class ChatClassifier:
                     clip = await self.twitch.create_clip(user.id, has_delay=True)
 
                 except TwitchResourceNotFound as e:
-                    print(f'\tFailed to create clip for {user.display_name} (Streamer not live)')
+                    print(f'Failed to create clip for {user.display_name} (Streamer not live)')
                     continue
                 except TwitchBackendException as e:
-                    print(f'\tFailed to create clip for {user.display_name} (Twitch backend error)')
+                    print(f'Failed to create clip for {user.display_name} (Twitch backend error)')
                     continue
                 except KeyError as e:
-                    print(f'\tFailed to create clip for {user.display_name} (probably don\'t have perms)')
+                    print(f'Failed to create clip for {user.display_name} (probably don\'t have perms)')
                     continue
 
-                print(f'\tClip created ({user.display_name}): {clip.edit_url}')
+                print(f'Clip created ({user.display_name}): {clip.edit_url}')
 
                 # add the clip to the list of clips to download
                 clips.append((clip, user))
@@ -252,9 +258,13 @@ class ChatClassifier:
 
 #           2. find a way to automatically name our clips (drastically improves view count)
 #           4. The moment a streamer is no longer live, start a timer for n minutes
-#              and then download the top 10 clips from the last length of stream
+#              and then download the top 10 clips from the last length of stream (high quality human made clips (presumably))
 #           5. compile all clips into a video
 #           6. upload the video to youtube 
+#           7. Add a delay between chat messages and clip creation (about 10 seconds)
+#          8. scan chat activity every second while including the last 20 seconds of chat activity and 
+#             only clip when the chat activity goes back down
+#          9. rather than cliping use the library to read the stream in directly
 
 # entry point
 def main(args):
