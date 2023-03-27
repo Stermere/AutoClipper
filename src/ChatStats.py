@@ -7,24 +7,31 @@ from copy import deepcopy
 import os
 import numpy as np
 
-USE_FROM_CSV = 200
+USE_FROM_CSV = 1000
 CLIP_THRESHOLD = 0.80
+STAT_CALC_INTERVAL = 1
+INCLUDE_INTERVAL = 10
 
 # one class handles one stream of chat messages
 class ChatStats:
-    def __init__(self, channel, interval=60):
+    def __init__(self, channel, time_window=INCLUDE_INTERVAL, stat_interval=STAT_CALC_INTERVAL):
         # the channel this stats object is for
         self.channel = channel
 
-        # the stats will be computed every interval seconds
-        self.interval = interval
+        # the size of the window that the stats are computed over
+        self.time_window = time_window
+
+        # the stats will be computed every stat_interval seconds
+        self.stat_interval = stat_interval
 
         # keep track of the last time we updated the stats
         self.msg_buffer = []
 
         # keep a window of the current log interval
         self.last_update = datetime.datetime.now()
-        self.next_update = self.last_update + datetime.timedelta(seconds=self.interval)
+        self.next_update = self.last_update + datetime.timedelta(seconds=self.time_window)
+
+        self.stat_update = datetime.datetime.now()
 
         # store the stats in a list
         self.stats = []
@@ -63,7 +70,7 @@ class ChatStats:
 
     # set the should_clip flag to true if the chat spiked
     def check_for_clip(self):
-        if len(self.stats) > 20:
+        if len(self.stats) > USE_FROM_CSV:
             # TODO - remove these hard coded values
             max_chats = max([stat.message_count for stat in self.stats])
             if self.stats[-1].message_count > max_chats * CLIP_THRESHOLD:
@@ -80,17 +87,26 @@ class ChatStats:
             return
 
         # get the messages from the buffer
-        messages = [msg for msg in self.msg_buffer if (self.next_update - msg[2]).total_seconds() < self.interval]
+        messages = [msg for msg in self.msg_buffer if (self.stat_update - msg[2]).total_seconds() < self.time_window]
+
+        # since the interval and update time are different only save the
+        # messages that are in the last update
+        messages_save = [msg for msg in self.msg_buffer if (self.next_update - msg[2]).total_seconds() < self.stat_interval]
+
+        # the first message in the list is always a repeat so remove it
+        if len(messages_save) > 0:
+            messages_save.pop(-1)
+
 
         # clear old messages from the buffer
-        self.msg_buffer = [msg for msg in self.msg_buffer if (self.next_update - msg[2]).total_seconds() >= self.interval]
+        self.msg_buffer = [msg for msg in self.msg_buffer if (self.stat_update - msg[2]).total_seconds() <= self.time_window]
 
         # compute the stats
         sentiment = sum([msg[1]['compound'] for msg in messages]) / len(messages)
         message_length = sum([len(msg[0].text) for msg in messages]) / len(messages)
         message_count = len(messages)
         message_count_no_repeats = len(set([msg[0].text for msg in messages]))
-        text_data  = [f'{msg[0].text}' for msg in messages]
+        text_data  = [f'{msg[0].text}' for msg in messages_save]
         text_data = [msg.encode('ascii', 'ignore').decode('ascii') for msg in text_data]
 
         # add the stats to the list
@@ -99,7 +115,9 @@ class ChatStats:
         # update the last update time (for loop in case we missed an update due to offline time)
         while now >= self.next_update:
             self.last_update = self.next_update
-            self.next_update = self.last_update + datetime.timedelta(seconds=self.interval)
+            self.next_update = self.last_update + datetime.timedelta(seconds=self.stat_interval)
+
+        self.stat_update = now - datetime.timedelta(seconds=self.time_window)
 
         # check if we should clip
         self.check_for_clip()
