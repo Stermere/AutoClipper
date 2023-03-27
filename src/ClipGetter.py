@@ -19,6 +19,8 @@ class ClipGetter:
             with open(clip_name, 'wb') as f:
                 f.write(r.content)
 
+        return f'{clip_dir}/{user.display_name}_{clip.id}.mp4'
+
     # get the most popular clips from a stream in the last time hours and downloads them to a subfolder
     def get_clips(self, user, client, time=24, clip_dir='temp/clips', clip_count=15):
         # get the clips from the last time hours
@@ -39,5 +41,8 @@ class ClipGetter:
 
         # return a list of the clips directory
         return [f'{clip_dir}/{user.display_name}_{clip.id}.mp4' for clip in clips[:clip_count]]
+    
+    async def get_clips_delay(self, delay, user, client, time=24, clip_dir='temp/clips', clip_count=15):
+        pass
 
 

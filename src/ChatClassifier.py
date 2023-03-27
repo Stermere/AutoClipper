@@ -10,10 +10,12 @@ import datetime
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from src.ChatStats import ChatStats
 from src.ClipGetter import ClipGetter
+from src.Clip import Clip
+import concurrent.futures
 import os
-import requests
 
 # app credentials (I should not hardcode this)
+# TODO TODO - put this in a config file
 APP_ID = 'lgsocblmqju7q5g2ipm9ixww1jwkbx'
 APP_SECRET = 'ttyixaqh5gpuc9z8e2fl4qasb3uxot'
 USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CLIPS_EDIT]
@@ -46,6 +48,10 @@ class ChatClassifier:
 
         # clip getter
         self.clip_getter = ClipGetter()
+
+        # loops 
+        self.minute_loop_task = None
+
 
     # return a list of messages in a channel between start_time and end_time
     # each message is a tuple of (ChatMessage, sentiment, datetime)
@@ -83,17 +89,40 @@ class ChatClassifier:
         # check if any channel should be clipped
         await self.check_for_clip()
 
-    # this will be called whenever someone subscribes to a channel when this happens
-    # we will check who is live and only clip those who are live
-    async def on_sub(self, sub: ChatSub):
-        # check who is live and only clip those who are live
-        streams = self.client.get_streams(user_ids=[user.id for user in self.users])
-        live_channels = [stream['user_login'] for stream in streams]
+    async def minute_loop(self):
+        while True:
+            # wait a minute
+            await asyncio.sleep(60)
 
-        # if there is a new channel that is live print it
-        if len(live_channels) > len(self.live_channels):
-            print(f'\tlive channels have been updated: {live_channels}')
+             # check who is live and only clip those who are live
+            streams = self.client.get_streams(user_ids=[user.id for user in self.users])
+            live_channels = [stream['user_login'] for stream in streams]
+
+            # get the difference between the live channels and the channels that are currently live
+            new = []
+            old = []
+            for channel in live_channels:
+                if not (channel in self.live_channels):
+                    new.append(channel)
+            for channel in self.live_channels:
+                if not (channel in live_channels):
+                    old.append(channel)
+
+            # update the live channels
+            if len(new) > 0:
+                print(f'New channels live: {new}')
+            if len(old) > 0:
+                print(f'Old channels offline: {old}')
             self.live_channels = live_channels
+
+            # register any channel that went offline as a channel to get clips from in the future
+            for channel in old:
+                # TODO call a function that does this 
+                pass
+            
+    # gets called every time there is a subscription event
+    async def on_sub(self, sub: ChatSub):
+       pass
 
     # this will be called whenever the !reply command is issued
     async def test_command(self, cmd: ChatCommand):
@@ -138,12 +167,8 @@ class ChatClassifier:
                 # add the clip to the list of clips to download
                 clips.append((clip, user))
 
-                clip.creat_edit_url()
-
-                # add the edit url to the url csv
-                with open('clip_urls.csv', 'a') as f:
+                with open('clip_edit_urls.csv', 'a') as f:
                     f.write(f'{clip.edit_url}, {self.chats[channel].stats[-1].message_count}\n')
-
 
         # get the clipa from the twitch api and download it
         # if after 15 seconds the clip is still not ready, assume it failed (from twitch themselves)
@@ -156,12 +181,25 @@ class ChatClassifier:
                     print(f'\tFailed to download clip of {user.display_name}')
                     continue
                 clip = clip[0]
-                self.clip_getter.download_clip(clip, user)
+                clip_dir = self.clip_getter.download_clip(clip, user)
+
 
                 print(f'\tClip downloaded ({user.display_name}): {clip["url"]}')
+                
+                # convert to a clip object for easy saving and loading
+                clip_obj = Clip(clip_dir, clip['id'], clip['broadcaster_id'], clip['broadcaster_name'], clip['view_count'])
+
+                # add the clip info to the csv file for that streamer
+                save_loc = f'clip_info'
+                save_name = f'clip_info/{user.display_name}.csv'
+                if not os.path.exists(save_loc):
+                    os.makedirs(save_loc, exist_ok=True)
+
+                with open(save_name, 'a') as f:
+                    f.write(clip_obj.to_string() + '\n')
+
 
                 
-
     # this is where we set up the bot
     async def run(self):
         # set up twitch api instance and add user authentication with some scopes
@@ -180,6 +218,9 @@ class ChatClassifier:
         streams = self.client.get_streams(user_ids=[user.id for user in self.users])
         self.live_channels = [stream['user_login'] for stream in streams]
         print(f'Live channels: {self.live_channels}')
+
+        # create a loop for checking if a channel is live
+        self.minute_loop_task = asyncio.create_task(self.minute_loop())
 
         # create chat instance
         self.chat = await Chat(self.twitch)
@@ -200,17 +241,25 @@ class ChatClassifier:
         # we are done with our setup, lets start this bot up!
         self.chat.start()
 
+        # wait for the user to press enter to exit
+        loop = asyncio.get_running_loop()
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            await loop.run_in_executor(pool, input, "Press enter to exit\n")
+
+
+#   TODO's  1. DONE decouple checking if a stream is live from the sub event
+#           3. DONE Save the clips directory for a specific streamer in a file for later use 
+
+#           2. find a way to automatically name our clips (drastically improves view count)
+#           4. The moment a streamer is no longer live, start a timer for n minutes
+#              and then download the top 10 clips from the last length of stream
+#           5. compile all clips into a video
+#           6. upload the video to youtube 
 
 # entry point
 def main(args):
     reader = ChatClassifier()
     asyncio.run(reader.run())
-
-    # without this, there is no way to stop the bot other than killing the process
-    try:
-        input('Press enter to quit\n')
-    except KeyboardInterrupt:
-        pass
 
     # before we quit, we need to save the data
     for channel in TARGET_CHANNELS:
