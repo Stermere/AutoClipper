@@ -141,17 +141,12 @@ class ChatClassifier:
     async def five_minute_loop(self):
         while True:
             # wait five minutes
-            #await asyncio.sleep(60 * 5)
+            await asyncio.sleep(60 * 5)
 
             # start a pool of processes one for each channel
             with concurrent.futures.ProcessPoolExecutor(max_workers=MAX_THREADS) as executor:
                 for user in self.users:
                     executor.submit(self.clipCompiler.merge_clips, ChatClassifier.CLIP_INFO_SAVE_NAME(user))
-
-
-            # wait five minutes
-            await asyncio.sleep(60 * 5)
-
             
     # gets called every time there is a subscription event
     async def on_sub(self, sub: ChatSub):

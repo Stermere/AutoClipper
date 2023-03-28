@@ -27,17 +27,12 @@ class ClipCompiler:
             clips_to_merge = self.find_overlapping_clip(clips)
             
             if clips_to_merge == None:
-                print('did not find any overlapping clips')
                 break
 
             print('Found overlapping clips merging...')
             
             # merge the clips
             merged_clip = self.merge_clip(clips_to_merge[0], clips_to_merge[1])
-
-            print('Merged')
-            merged_clip.write_videofile('output.mp4')
-            return;
 
             # remove the old clips from file
             os.remove(clips_to_merge[0].clip_dir)
@@ -62,8 +57,6 @@ class ClipCompiler:
         with open(csv_file_dir, 'w') as f:
             for clip in clips:
                 f.write(clip.to_string())
-
-        print('Done merging clips')
 
     # merges two clips together
     def merge_clip(self, clip1, clip2):
@@ -91,20 +84,16 @@ class ClipCompiler:
     def get_merge_point(self, arr1, arr2):
         # find the merge point 
         # (assumes that the merge point is in the second half of the first array)
-        merge_point_1 = 0
-        merge_point_2 = 0
+        merge_point_1 = None
+        merge_point_2 = None
+
         # only use the last frame of the first video
         entry = arr1[-1]
 
         merge_point_1 = len(arr1)
-        merge_point_2 = None
         for i, entry2 in enumerate(arr2):
             if (entry2 == entry).all():
                 merge_point_2 = i
-
-        if merge_point_2 == None:
-            print('Cannot merge videos')
-
 
         return merge_point_1, merge_point_2
     
