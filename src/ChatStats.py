@@ -11,6 +11,7 @@ USE_FROM_CSV = 1000
 CLIP_THRESHOLD = 0.80
 STAT_CALC_INTERVAL = 1
 INCLUDE_INTERVAL = 10
+GUANANTEED_CLIP_LENGTH = 20
 
 # one class handles one stream of chat messages
 class ChatStats:
@@ -43,19 +44,20 @@ class ChatStats:
 
         # keep track of whether we should clip or not (this is only set to true by this class)
         self.should_clip = False
+        self.last_clip = datetime.datetime.now()
 
 
     # returns the boolean value of should_clip
     # and sets should_clip to false
     def get_should_clip(self):
-        return_val = self.should_clip 
+        return_val = self.should_clip
+
+        if (return_val):
+            self.last_clip = datetime.datetime.now()
+
         self.should_clip = False
         return return_val
     
-    
-    def set_should_clip(self, should_clip):
-        self.should_clip = should_clip
-
     # get the stats
     def get_stats(self):
         return deepcopy(self.stats)
@@ -70,11 +72,13 @@ class ChatStats:
 
     # set the should_clip flag to true if the chat spiked
     def check_for_clip(self):
-        if len(self.stats) > USE_FROM_CSV:
-            # TODO - remove these hard coded values
+        if len(self.stats) > USE_FROM_CSV and self.last_clip + datetime.timedelta(seconds=GUANANTEED_CLIP_LENGTH) < datetime.datetime.now():
             max_chats = max([stat.message_count for stat in self.stats])
+            
             if self.stats[-1].message_count > max_chats * CLIP_THRESHOLD:
                 self.should_clip = True
+
+                # TODO remove this print statement
                 print(f'\tregistered clip on: {self.channel} with {self.stats[-1].message_count} messages')
 
     # update the stats

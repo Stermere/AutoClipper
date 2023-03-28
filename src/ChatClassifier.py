@@ -10,30 +10,34 @@ import datetime
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from src.ChatStats import ChatStats
 from src.ClipGetter import ClipGetter
+from src.ClipCompiler import ClipCompiler
 from src.Clip import Clip
 import concurrent.futures
 import os
 
-# app credentials (I should not hardcode this)
-# TODO TODO - put this in a config file
-
 # load the app credentials from a file named app_credentials.txt
 # first line the app id, second line the app secret
-
 with open('app_credentials.txt', 'r') as f:
     APP_ID = f.readline().strip()
     APP_SECRET = f.readline().strip()
 
 USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CLIPS_EDIT]
-TARGET_CHANNELS = ['miyune', 'vedal987', 'filian', 'shylily', 'moistcr1tikal', 'lirik', 'timthetatman', 'sykkuno', 'sinder', 'ironmouse', 'vei']
+#TARGET_CHANNELS = ['miyune', 'vedal987', 'shylily', 'filian', 'moistcr1tikal', 'lirik', 'timthetatman', 'sykkuno', 'sinder', 'ironmouse', 'vei'
+#                   'xqc', 'esl_csgo', 'hasanabi', 'shroud']
+TARGET_CHANNELS = ['shylily']
 TIME_WINDOW = 10
 STAT_INTERVAL = 1
+MAX_THREADS = 1
 
-# optional - print the chat messages to the console but delete them after a new message is received
+# optional - print the chat messages to the console but carraige return before each message
 PRINT_CHAT = False
 
 # this is the main class that will handle the chat bot
 class ChatClassifier:
+    # takes a twitch user object and returns the path to the csv file that stores the clip info for that user
+    CLIP_INFO_SAVE_NAME = lambda x : f'clip_info/{x.display_name}.csv'
+    CLIP_INFO_DIR = 'clip_info'
+
     # prepare a dictionary to store the messages in by channel
     def __init__(self):
         self.chats = {}
@@ -55,8 +59,14 @@ class ChatClassifier:
         # clip getter
         self.clip_getter = ClipGetter()
 
+        # clip compiler
+        self.clipCompiler = ClipCompiler()
+
+        # clip editor
+
         # loops 
         self.minute_loop_task = None
+        self.five_minute_loop_task = None
 
 
     # return a list of messages in a channel between start_time and end_time
@@ -95,6 +105,7 @@ class ChatClassifier:
         # check if any channel should be clipped
         await self.check_for_clip()
 
+    # runs once per minute
     async def minute_loop(self):
         while True:
             # wait a minute
@@ -125,6 +136,22 @@ class ChatClassifier:
             for channel in old:
                 # TODO call a function that does this 
                 pass
+
+    # calls the clip compiler and compiles the clips
+    async def five_minute_loop(self):
+        while True:
+            # wait five minutes
+            #await asyncio.sleep(60 * 5)
+
+            # start a pool of processes one for each channel
+            with concurrent.futures.ProcessPoolExecutor(max_workers=MAX_THREADS) as executor:
+                for user in self.users:
+                    executor.submit(self.clipCompiler.merge_clips, ChatClassifier.CLIP_INFO_SAVE_NAME(user))
+
+
+            # wait five minutes
+            await asyncio.sleep(60 * 5)
+
             
     # gets called every time there is a subscription event
     async def on_sub(self, sub: ChatSub):
@@ -137,49 +164,53 @@ class ChatClassifier:
     # checks if any channel should be clipped and clips it if so
     async def check_for_clip(self):
         clips = []
-        for i, channel in enumerate(TARGET_CHANNELS):
+        for channel in TARGET_CHANNELS:
             # check if the channel is live
             if not (channel in self.live_channels):
                 continue
 
-            if self.chats[channel].get_should_clip():
-                # get the user object of the channel
-                user = None
-                for u in self.users:
-                    if u['login'] == channel:
-                        user = u
-                        break
-                # check if we found the user object
-                if user is None:
-                    print(f'Failed to find user object for {channel}')
-                    continue
+            # skip if the channel should not be clipped
+            if not self.chats[channel].get_should_clip():
+                break
 
-                # try to create a clip
-                try:
-                    clip = await self.twitch.create_clip(user.id, has_delay=True)
+            # get the user object of the channel
+            user = None
+            for u in self.users:
+                if u['login'] == channel:
+                    user = u
+                    break
+            # check if we found the user object
+            if user is None:
+                print(f'Failed to find user object for {channel}')
+                continue
 
-                except TwitchResourceNotFound as e:
-                    print(f'Failed to create clip for {user.display_name} (Streamer not live)')
-                    continue
-                except TwitchBackendException as e:
-                    print(f'Failed to create clip for {user.display_name} (Twitch backend error)')
-                    continue
-                except KeyError as e:
-                    print(f'Failed to create clip for {user.display_name} (probably don\'t have perms)')
-                    continue
+            # try to create a clip
+            try:
+                clip = await self.twitch.create_clip(user.id, has_delay=True)
 
-                print(f'Clip created ({user.display_name}): {clip.edit_url}')
+            # exception handling
+            except TwitchResourceNotFound as e:
+                print(f'Failed to create clip for {user.display_name} (Streamer not live)')
+                continue
+            except TwitchBackendException as e:
+                print(f'Failed to create clip for {user.display_name} (Twitch backend error)')
+                continue
+            except KeyError as e:
+                print(f'Failed to create clip for {user.display_name} (Probably don\'t have perms)')
+                continue
 
-                # add the clip to the list of clips to download
-                clips.append((clip, user))
+            print(f'Clip created ({user.display_name}): {clip.edit_url}')
 
-                with open('clip_edit_urls.csv', 'a') as f:
-                    f.write(f'{clip.edit_url}, {self.chats[channel].stats[-1].message_count}\n')
+            # add the clip to the list of clips to download
+            clips.append((clip, user))
+
+            with open('clip_edit_urls.csv', 'a') as f:
+                f.write(f'{clip.edit_url}, {self.chats[channel].stats[-1].message_count}\n')
 
         # get the clipa from the twitch api and download it
         # if after 15 seconds the clip is still not ready, assume it failed (from twitch themselves)
         if (clips != []):
-            print(f'\tWaiting for clips to be ready...')
+            print(f'\tWaiting for twitch...')
             await asyncio.sleep(15)
             for clip, user in clips:
                 clip = self.client.get_clips(clip_ids=[clip.id])
@@ -189,22 +220,18 @@ class ChatClassifier:
                 clip = clip[0]
                 clip_dir = self.clip_getter.download_clip(clip, user)
 
-
                 print(f'\tClip downloaded ({user.display_name}): {clip["url"]}')
                 
                 # convert to a clip object for easy saving and loading
-                clip_obj = Clip(clip_dir, clip['id'], clip['broadcaster_id'], clip['broadcaster_name'], clip['view_count'])
+                clip_obj = Clip(clip_dir, clip['id'], clip['broadcaster_id'], clip['broadcaster_name'], datetime.datetime.fromisoformat(str(clip['created_at'])), clip['duration'], clip['view_count'])
 
                 # add the clip info to the csv file for that streamer
-                save_loc = f'clip_info'
-                save_name = f'clip_info/{user.display_name}.csv'
-                if not os.path.exists(save_loc):
-                    os.makedirs(save_loc, exist_ok=True)
+                save_name = ChatClassifier.CLIP_INFO_SAVE_NAME(user)
+                if not os.path.exists(ChatClassifier.CLIP_INFO_DIR):
+                    os.makedirs(ChatClassifier.CLIP_INFO_DIR, exist_ok=True)
 
                 with open(save_name, 'a') as f:
                     f.write(clip_obj.to_string() + '\n')
-
-
                 
     # this is where we set up the bot
     async def run(self):
@@ -227,6 +254,8 @@ class ChatClassifier:
 
         # create a loop for checking if a channel is live
         self.minute_loop_task = asyncio.create_task(self.minute_loop())
+
+        self.five_minute_loop_task = asyncio.create_task(self.five_minute_loop())
 
         # create chat instance
         self.chat = await Chat(self.twitch)
@@ -255,6 +284,7 @@ class ChatClassifier:
 
 #   TODO's  1. DONE decouple checking if a stream is live from the sub event
 #           3. DONE Save the clips directory for a specific streamer in a file for later use 
+#          8. DONE scan chat activity every second while including the last 20 seconds of chat activity
 
 #           2. find a way to automatically name our clips (drastically improves view count)
 #           4. The moment a streamer is no longer live, start a timer for n minutes
@@ -262,9 +292,8 @@ class ChatClassifier:
 #           5. compile all clips into a video
 #           6. upload the video to youtube 
 #           7. Add a delay between chat messages and clip creation (about 10 seconds)
-#          8. scan chat activity every second while including the last 20 seconds of chat activity and 
-#             only clip when the chat activity goes back down
-#          9. rather than cliping use the library to read the stream in directly
+#           9. rather than cliping use the library to read the stream in directly
+#           10. prevent double clips (if a clip is already being created, don't create another one until 30 seconds after the first one so that we can stitch them together) 
 
 # entry point
 def main(args):
