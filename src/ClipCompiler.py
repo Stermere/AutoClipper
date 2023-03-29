@@ -9,23 +9,19 @@ import datetime
 class ClipCompiler:
     # given a csv file of clips cluster them into groups where clips overlap and merge them
     def merge_clips(self, csv_file_dir):
-        clips = []
-
         # check if the file exists
         if not os.path.exists(csv_file_dir):
             return
-        
-        # each line in the csv file is a clip
-        with open(csv_file_dir, 'r') as f:
-            clip_str = f.readlines()
 
-        for clip in clip_str:
-            clips.append(Clip.from_string(clip))
-    
         # if the difference between two clips is less than GUANANTEED_CLIP_LENGTH then merge them
         while True:
+            # open the csv file
+            clips = self.open_csv(csv_file_dir)
+
+            # get two overlapping clips
             clips_to_merge = self.find_overlapping_clip(clips)
             
+            # if there are none then break
             if clips_to_merge == None:
                 break
 
@@ -64,9 +60,7 @@ class ClipCompiler:
             print(f'Merged {clips_to_merge[0].clip_dir} and {clips_to_merge[1].clip_dir} into {new_clip.clip_dir}')
 
             # rewrite the csv file
-            with open(csv_file_dir, 'w') as f:
-                for clip in clips:
-                    f.write(clip.to_string() + '\n')
+            self.write_csv(csv_file_dir, clips_to_merge, new_clip)
 
     # merges two clips together
     def merge_clip(self, clip1, clip2):
@@ -168,3 +162,30 @@ class ClipCompiler:
                         if clip2.time + datetime.timedelta(seconds=clip2.duration) > clip.time:
                             return (clip2, clip)  
         return None
+    
+    def open_csv(self, csv_file_dir):
+        clips = []
+        # each line in the csv file is a clip
+        with open(csv_file_dir, 'r') as f:
+            clip_str = f.readlines()
+
+        for clip in clip_str:
+            clips.append(Clip.from_string(clip))
+
+        return clips
+    
+    def write_csv(self, csv_file_dir, clips_removed, clips_added):
+        # open the csv file
+        clips = self.open_csv(csv_file_dir)
+
+        # remove the clips that were removed
+        for clip in clips_removed:
+            clips.remove(clip)
+
+        # add the clips that were added
+        for clip in clips_added:
+            clips.append(clip)
+
+        with open(csv_file_dir, 'w') as f:
+            for clip in clips:
+                f.write(clip.to_string() + '\n')

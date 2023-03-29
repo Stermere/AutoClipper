@@ -23,6 +23,6 @@ class Clip:
         # convert types
         split[4] = datetime.datetime.strptime(split[4], '%Y-%m-%d %H:%M:%S')
         split[5] = float(split[5])
-        split[6] = int(split[6])
+        split[6] = split[6].strip('\n')
 
         return Clip(split[0], split[1], split[2], split[3], split[4], split[5], split[6])

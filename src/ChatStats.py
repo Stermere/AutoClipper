@@ -7,11 +7,11 @@ from copy import deepcopy
 import os
 import numpy as np
 
-USE_FROM_CSV = 1000
-CLIP_THRESHOLD = 0.80
+USE_FROM_CSV = 600
+CLIP_THRESHOLD = 0.8
 STAT_CALC_INTERVAL = 1
 INCLUDE_INTERVAL = 10
-GUANANTEED_CLIP_LENGTH = 20
+GUANANTEED_CLIP_LENGTH = 15
 
 # one class handles one stream of chat messages
 class ChatStats:
@@ -44,19 +44,16 @@ class ChatStats:
 
         # keep track of whether we should clip or not (this is only set to true by this class)
         self.should_clip = False
-        self.last_clip = datetime.datetime.now()
+        self.last_clip = datetime.datetime.now() - datetime.timedelta(seconds=GUANANTEED_CLIP_LENGTH)
 
-
-    # returns the boolean value of should_clip
-    # and sets should_clip to false
     def get_should_clip(self):
-        return_val = self.should_clip
-
-        if (return_val):
+        if (self.should_clip):
             self.last_clip = datetime.datetime.now()
-
-        self.should_clip = False
-        return return_val
+            
+        return self.should_clip
+    
+    def set_should_clip(self, value):
+        self.should_clip = value
     
     # get the stats
     def get_stats(self):
@@ -72,15 +69,11 @@ class ChatStats:
 
     # set the should_clip flag to true if the chat spiked
     def check_for_clip(self):
-        if len(self.stats) > USE_FROM_CSV and self.last_clip + datetime.timedelta(seconds=GUANANTEED_CLIP_LENGTH) < datetime.datetime.now():
-            max_chats = max([stat.message_count for stat in self.stats])
-            
+        if (len(self.stats) > USE_FROM_CSV) and (self.last_clip + datetime.timedelta(seconds=GUANANTEED_CLIP_LENGTH) < datetime.datetime.now()):
+            max_chats = np.max([stat.message_count for stat in self.stats[-USE_FROM_CSV:]])
             if self.stats[-1].message_count > max_chats * CLIP_THRESHOLD:
                 self.should_clip = True
-
-                # TODO remove this print statement
-                print(f'\tregistered clip on: {self.channel} with {self.stats[-1].message_count} messages')
-
+                
     # update the stats
     def update(self):
         # get the time to cut off the messages

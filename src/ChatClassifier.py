@@ -13,6 +13,7 @@ from src.ClipGetter import ClipGetter
 from src.ClipCompiler import ClipCompiler
 from src.Clip import Clip
 import concurrent.futures
+from multiprocessing import Process
 import os
 
 # load the app credentials from a file named app_credentials.txt
@@ -22,12 +23,13 @@ with open('app_credentials.txt', 'r') as f:
     APP_SECRET = f.readline().strip()
 
 USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CLIPS_EDIT]
-#TARGET_CHANNELS = ['miyune', 'vedal987', 'shylily', 'filian', 'moistcr1tikal', 'lirik', 'timthetatman', 'sykkuno', 'sinder', 'ironmouse', 'vei'
-#                   'xqc', 'esl_csgo', 'hasanabi', 'shroud']
-TARGET_CHANNELS = ['shylily']
+TARGET_CHANNELS = ['miyune', 'vedal987', 'shylily', 'filian', 'moistcr1tikal', 'lirik', 'timthetatman', 'sykkuno', 'sinder', 'ironmouse', 'vei'
+                   'xqc', 'esl_csgo', 'shroud', 'hasanabi']
+#TARGET_CHANNELS = ['shroud']
 TIME_WINDOW = 10
 STAT_INTERVAL = 1
 MAX_THREADS = 1
+MERGE_CLIPS = True
 
 # optional - print the chat messages to the console but carraige return before each message
 PRINT_CHAT = False
@@ -65,6 +67,7 @@ class ChatClassifier:
         # clip editor
 
         # loops 
+        self.second_loop_task = None
         self.minute_loop_task = None
         self.five_minute_loop_task = None
 
@@ -100,10 +103,15 @@ class ChatClassifier:
 
         # print the message and nothing else
         if PRINT_CHAT:
-            print(msg.text)
+            print(('\r' + msg.text)[:50], end='')
 
-        # check if any channel should be clipped
-        await self.check_for_clip()
+    async def second_loop(self):
+        while True:
+            # wait a second
+            await asyncio.sleep(1)
+
+            # check if any channel should be clipped
+            await self.check_for_clip()
 
     # runs once per minute
     async def minute_loop(self):
@@ -140,13 +148,18 @@ class ChatClassifier:
     # calls the clip compiler and compiles the clips
     async def five_minute_loop(self):
         while True:
+            # start a pool of processes one for each channel
+            workers = []
+            for i, user in enumerate(self.users):
+                workers.append(Process(target=self.clipCompiler.merge_clips, args=(ChatClassifier.CLIP_INFO_SAVE_NAME(user),)))
+                workers[i].start()
+
             # wait five minutes
             await asyncio.sleep(60 * 5)
 
-            # start a pool of processes one for each channel
-            with concurrent.futures.ProcessPoolExecutor(max_workers=MAX_THREADS) as executor:
-                for user in self.users:
-                    executor.submit(self.clipCompiler.merge_clips, ChatClassifier.CLIP_INFO_SAVE_NAME(user))
+            # join the processes
+            for user in self.users:
+                workers[i].join()
             
     # gets called every time there is a subscription event
     async def on_sub(self, sub: ChatSub):
@@ -157,6 +170,7 @@ class ChatClassifier:
         print(f'Command {cmd.command} was issued by {cmd.user.name} in {cmd.room.name}')
 
     # checks if any channel should be clipped and clips it if so
+    # TODO make this better (make it so all clips are clipped at the same time)
     async def check_for_clip(self):
         clips = []
         for channel in TARGET_CHANNELS:
@@ -166,7 +180,7 @@ class ChatClassifier:
 
             # skip if the channel should not be clipped
             if not self.chats[channel].get_should_clip():
-                break
+                continue
 
             # get the user object of the channel
             user = None
@@ -174,10 +188,13 @@ class ChatClassifier:
                 if u['login'] == channel:
                     user = u
                     break
+
             # check if we found the user object
             if user is None:
                 print(f'Failed to find user object for {channel}')
                 continue
+
+            self.chats[channel].set_should_clip(False)
 
             # try to create a clip
             try:
@@ -250,7 +267,10 @@ class ChatClassifier:
         # create a loop for checking if a channel is live
         self.minute_loop_task = asyncio.create_task(self.minute_loop())
 
-        self.five_minute_loop_task = asyncio.create_task(self.five_minute_loop())
+        if MERGE_CLIPS:
+            self.five_minute_loop_task = asyncio.create_task(self.five_minute_loop())
+
+        self.second_loop_task = asyncio.create_task(self.second_loop())
 
         # create chat instance
         self.chat = await Chat(self.twitch)
@@ -279,16 +299,15 @@ class ChatClassifier:
 
 #   TODO's  1. DONE decouple checking if a stream is live from the sub event
 #           3. DONE Save the clips directory for a specific streamer in a file for later use 
-#          8. DONE scan chat activity every second while including the last 20 seconds of chat activity
+#           8. DONE scan chat activity every second while including the last 20 seconds of chat activity
+#           7. DONE Add a delay between chat messages and clip creation (about 10 seconds)
+#           10. DONE prevent double clips (if a clip is already being created, don't create another one until 30 seconds after the first one so that we can stitch them together) 
 
 #           2. find a way to automatically name our clips (drastically improves view count)
 #           4. The moment a streamer is no longer live, start a timer for n minutes
 #              and then download the top 10 clips from the last length of stream (high quality human made clips (presumably))
 #           5. compile all clips into a video
 #           6. upload the video to youtube 
-#           7. Add a delay between chat messages and clip creation (about 10 seconds)
-#           9. rather than cliping use the library to read the stream in directly
-#           10. prevent double clips (if a clip is already being created, don't create another one until 30 seconds after the first one so that we can stitch them together) 
 
 # entry point
 def main(args):
