@@ -28,8 +28,6 @@ TARGET_CHANNELS = ['miyune', 'vedal987', 'shylily', 'filian', 'moistcr1tikal', '
 #TARGET_CHANNELS = ['shroud']
 TIME_WINDOW = 10
 STAT_INTERVAL = 1
-MAX_THREADS = 1
-MERGE_CLIPS = True
 
 # optional - print the chat messages to the console but carraige return before each message
 PRINT_CHAT = False
@@ -142,11 +140,11 @@ class ChatClassifier:
 
             # register any channel that went offline as a channel to get clips from in the future
             for channel in old:
-                # TODO call a function that does this 
+                # TODO
                 pass
 
-    # calls the clip compiler and compiles the clips
-    async def five_minute_loop(self):
+    # calls the clip compiler and makes videos when enough clips have rolled in
+    async def video_loop(self):
         while True:
             # start a pool of processes one for each channel
             workers = []
@@ -154,12 +152,14 @@ class ChatClassifier:
                 workers.append(Process(target=self.clipCompiler.merge_clips, args=(ChatClassifier.CLIP_INFO_SAVE_NAME(user),)))
                 workers[i].start()
 
-            # wait five minutes
-            await asyncio.sleep(60 * 5)
+            await asyncio.sleep(60)
 
             # join the processes
             for user in self.users:
                 workers[i].join()
+
+            # TODO call a function to see if a video should be made
+
             
     # gets called every time there is a subscription event
     async def on_sub(self, sub: ChatSub):
@@ -264,12 +264,9 @@ class ChatClassifier:
         self.live_channels = [stream['user_login'] for stream in streams]
         print(f'Live channels: {self.live_channels}')
 
-        # create a loop for checking if a channel is live
+        # create some loops
         self.minute_loop_task = asyncio.create_task(self.minute_loop())
-
-        if MERGE_CLIPS:
-            self.five_minute_loop_task = asyncio.create_task(self.five_minute_loop())
-
+        self.five_minute_loop_task = asyncio.create_task(self.video_loop())
         self.second_loop_task = asyncio.create_task(self.second_loop())
 
         # create chat instance
@@ -297,17 +294,11 @@ class ChatClassifier:
             await loop.run_in_executor(pool, input, "Press enter to exit\n")
 
 
-#   TODO's  1. DONE decouple checking if a stream is live from the sub event
-#           3. DONE Save the clips directory for a specific streamer in a file for later use 
-#           8. DONE scan chat activity every second while including the last 20 seconds of chat activity
-#           7. DONE Add a delay between chat messages and clip creation (about 10 seconds)
-#           10. DONE prevent double clips (if a clip is already being created, don't create another one until 30 seconds after the first one so that we can stitch them together) 
-
-#           2. find a way to automatically name our clips (drastically improves view count)
-#           4. The moment a streamer is no longer live, start a timer for n minutes
+#   TODO's  1. make the video maker class
+#           2. The moment a streamer is no longer live, start a timer for n minutes
 #              and then download the top 10 clips from the last length of stream (high quality human made clips (presumably))
-#           5. compile all clips into a video
-#           6. upload the video to youtube 
+#           3. upload the video to youtube 
+#           4. find a way to automatically name our clips (drastically improves view count)
 
 # entry point
 def main(args):

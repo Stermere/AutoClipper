@@ -60,16 +60,12 @@ class ClipCompiler:
             print(f'Merged {clips_to_merge[0].clip_dir} and {clips_to_merge[1].clip_dir} into {new_clip.clip_dir}')
 
             # rewrite the csv file
-            self.write_csv(csv_file_dir, clips_to_merge, new_clip)
+            self.write_csv(csv_file_dir, clips_to_merge, [new_clip])
 
     # merges two clips together
     def merge_clip(self, clip1, clip2):
         # find the merge point
         merge_point_1, merge_point_2, vid_fps_1, vid_fps_2 = self.get_merge_point(clip1, clip2)
-
-        # TODO remove 
-        print(merge_point_1)
-        print(merge_point_2)
 
         if (merge_point_1 == None or merge_point_2 == None):
             print('Error: merge point not found')
@@ -118,7 +114,6 @@ class ClipCompiler:
             if (sum_ > best_sum):
                 merge_point_2 = frame
                 best_sum = sum_
-                print(f'Found merge point {frame}')
             frame += 1
 
         cap.release()
@@ -126,7 +121,6 @@ class ClipCompiler:
         return merge_point_1, merge_point_2, fps1, fps2
     
     # given a clip object return a numpy array of the frames
-    # TODO avoid reading the whole video just read the end
     def get_frame(self, clip):
         cap = cv2.VideoCapture(clip.clip_dir)
         frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -150,7 +144,6 @@ class ClipCompiler:
     # returns a tuple of the two clips that overlap
     # the first clip in the tuple is the one that comes first chronologically
     # returns None if no clips overlap
-    # TODO make this return a list of clips to merge
     def find_overlapping_clip(self, clips):
         for i, clip in enumerate(clips):
             for j, clip2 in enumerate(clips):
@@ -180,11 +173,13 @@ class ClipCompiler:
 
         # remove the clips that were removed
         for clip in clips_removed:
-            clips.remove(clip)
+            if clip in clips:
+                clips.remove(clip)
 
         # add the clips that were added
         for clip in clips_added:
-            clips.append(clip)
+            if clip not in clips:
+                clips.append(clip)
 
         with open(csv_file_dir, 'w') as f:
             for clip in clips:
