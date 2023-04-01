@@ -8,6 +8,7 @@ import twitch
 from src.ClipGetter import ClipGetter
 
 TRANSITION_VOLUME = 0.1
+OUTPUT_RESOLUTION = (1920, 1080)
 
 class VideoMaker:
     def __init__(self, clip_dirs, output_dir, intro_clip_dir=None, outro_clip_dir=None, transition_dir=None):
@@ -34,7 +35,7 @@ class VideoMaker:
 
         # resize all videos to 1080p
         for i in range(len(videos)):
-            videos[i] = videos[i].resize((1920, 1080))
+            videos[i] = videos[i].resize(OUTPUT_RESOLUTION)
 
         # get the combined video
         final_clip = concatenate_videoclips(videos, method="compose")
