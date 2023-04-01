@@ -62,12 +62,9 @@ class ChatClassifier:
         # clip compiler
         self.clipCompiler = ClipCompiler()
 
-        # clip editor
-
         # loops 
         self.second_loop_task = None
         self.minute_loop_task = None
-        self.five_minute_loop_task = None
 
 
     # return a list of messages in a channel between start_time and end_time
@@ -142,24 +139,6 @@ class ChatClassifier:
             for channel in old:
                 # TODO
                 pass
-
-    # calls the clip compiler and makes videos when enough clips have rolled in
-    async def video_loop(self):
-        while True:
-            # start a pool of processes one for each channel
-            workers = []
-            for i, user in enumerate(self.users):
-                workers.append(Process(target=self.clipCompiler.merge_clips, args=(ChatClassifier.CLIP_INFO_SAVE_NAME(user),)))
-                workers[i].start()
-
-            await asyncio.sleep(60)
-
-            # join the processes
-            for user in self.users:
-                workers[i].join()
-
-            # TODO call a function to see if a video should be made
-
             
     # gets called every time there is a subscription event
     async def on_sub(self, sub: ChatSub):
@@ -266,7 +245,6 @@ class ChatClassifier:
 
         # create some loops
         self.minute_loop_task = asyncio.create_task(self.minute_loop())
-        self.five_minute_loop_task = asyncio.create_task(self.video_loop())
         self.second_loop_task = asyncio.create_task(self.second_loop())
 
         # create chat instance
