@@ -12,11 +12,12 @@ class ClipCompiler:
         # check if the file exists
         if not os.path.exists(csv_file_dir):
             return
+        
+        # open the csv file
+        clips = self.open_csv(csv_file_dir)
 
         # if the difference between two clips is less than GUANANTEED_CLIP_LENGTH then merge them
         while True:
-            # open the csv file
-            clips = self.open_csv(csv_file_dir)
 
             # get two overlapping clips
             clips_to_merge = self.find_overlapping_clip(clips)
