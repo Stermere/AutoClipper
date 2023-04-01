@@ -4,6 +4,7 @@ import sys
 from src.ChatClassifier import main as chat_classifier
 from src.VideoMaker import VideoMaker
 from src.ClipCompiler import ClipCompiler
+import asyncio
 
 if __name__ == '__main__':
     if len(sys.argv) < 2 or sys.argv[1] == '-h' or sys.argv[1] == '--help':
@@ -17,7 +18,7 @@ if __name__ == '__main__':
         if len(sys.argv) < 3:
             print('Usage: python3 Main.py -v channel_name')
             exit(0)
-        VideoMaker.make_from_channel(sys.argv[2])
+        asyncio.run(VideoMaker.make_from_channel(sys.argv[2]))
     elif sys.argv[1] == '-c':
         # check for the second arg of the csv file specifying the clips
         if len(sys.argv) < 3 and sys.argv[2].endswith('.csv'):

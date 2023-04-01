@@ -13,7 +13,6 @@ from src.ClipGetter import ClipGetter
 from src.ClipCompiler import ClipCompiler
 from src.Clip import Clip
 import concurrent.futures
-from multiprocessing import Process
 import os
 
 # load the app credentials from a file named app_credentials.txt
@@ -22,10 +21,14 @@ with open('app_credentials.txt', 'r') as f:
     APP_ID = f.readline().strip()
     APP_SECRET = f.readline().strip()
 
-USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CLIPS_EDIT]
-TARGET_CHANNELS = ['miyune', 'vedal987', 'shylily', 'filian', 'moistcr1tikal', 'lirik', 'timthetatman', 'sykkuno', 'sinder', 'ironmouse', 'vei'
-                   'xqc', 'esl_csgo', 'shroud', 'hasanabi']
+# load the target channels from a file named target_channels.txt
+# each channel should be on a new line
+with open('target_channels.txt', 'r') as f:
+    TARGET_CHANNELS = f.readlines()
+    TARGET_CHANNELS = [channel.strip() for channel in TARGET_CHANNELS]
 #TARGET_CHANNELS = ['shroud']
+
+USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CLIPS_EDIT]
 TIME_WINDOW = 10
 STAT_INTERVAL = 1
 

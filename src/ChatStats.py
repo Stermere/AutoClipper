@@ -7,8 +7,8 @@ from copy import deepcopy
 import os
 import numpy as np
 
-USE_FROM_CSV = 600
-CLIP_THRESHOLD = 0.8
+USE_FROM_CSV = 1200
+CLIP_THRESHOLD = 0.85
 STAT_CALC_INTERVAL = 1
 INCLUDE_INTERVAL = 10
 GUANANTEED_CLIP_LENGTH = 15
