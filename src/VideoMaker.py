@@ -1,14 +1,13 @@
 # a class that takes edits clips in to videos it is assumed that the clips are already edited and ready to be slaped together
 from moviepy.editor import *
 
-import asyncio
 from twitchAPI import Twitch
 from twitchAPI.oauth import UserAuthenticator
 from twitchAPI.types import AuthScope
 import twitch
 from src.ClipGetter import ClipGetter
 
-TRANSITION_VOLUME = 0.2
+TRANSITION_VOLUME = 0.1
 
 class VideoMaker:
     def __init__(self, clip_dirs, output_dir, intro_clip_dir=None, outro_clip_dir=None, transition_dir=None):
@@ -22,7 +21,7 @@ class VideoMaker:
     def make_video(self):
         # first thing lets combine all the clips in clip_dirs
         videos = []
-        for (i, clip_dir) in enumerate(self.clip_dirs):
+        for clip_dir in self.clip_dirs:
             videos.append(VideoFileClip(clip_dir))
             videos.append(VideoFileClip(self.transition_dir).volumex(TRANSITION_VOLUME))
 
@@ -32,6 +31,10 @@ class VideoMaker:
 
         if (self.outro_clip_dir != None):
             videos.append(VideoFileClip(self.outro_clip_dir))
+
+        # resize all videos to 1080p
+        for i in range(len(videos)):
+            videos[i] = videos[i].resize((1920, 1080))
 
         # get the combined video
         final_clip = concatenate_videoclips(videos, method="compose")
@@ -70,12 +73,20 @@ class VideoMaker:
 
         clipGetter = ClipGetter()
 
+        print("Getting clips for " + users[0].display_name)
+
         dirs = clipGetter.get_clips(users[0], client, clip_dir='temp/clips', clip_count=clip_count)
+
+        print("Got clips... making video")
 
         # now lets make the video
         video_maker = VideoMaker(dirs, output_dir, transition_dir=transition_dir)
 
         video_maker.make_video()
+
+        # delete the clips
+        for dir_ in dirs:
+            os.remove(dir_)
 
 
 
