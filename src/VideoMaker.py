@@ -6,8 +6,11 @@ from twitchAPI.oauth import UserAuthenticator
 from twitchAPI.types import AuthScope
 import twitch
 from src.ClipGetter import ClipGetter
+from src.TwitchAuthenticator import TwitchAuthenticator
+import datetime
 
 TRANSITION_VOLUME = 0.1
+TRANSITION_SUBCLIP = (2, 2.5)
 OUTPUT_RESOLUTION = (1920, 1080)
 
 class VideoMaker:
@@ -22,9 +25,11 @@ class VideoMaker:
     def make_video(self):
         # first thing lets combine all the clips in clip_dirs
         videos = []
-        for clip_dir in self.clip_dirs:
+        for i, clip_dir in enumerate(self.clip_dirs):
             videos.append(VideoFileClip(clip_dir))
-            videos.append(VideoFileClip(self.transition_dir).volumex(TRANSITION_VOLUME))
+            if (i == len(self.clip_dirs) - 1):
+                continue
+            videos.append(VideoFileClip(self.transition_dir).volumex(TRANSITION_VOLUME).subclip(TRANSITION_SUBCLIP[0], TRANSITION_SUBCLIP[1]))
 
         # now lets add the intro and outro clips
         if (self.intro_clip_dir != None):
@@ -44,41 +49,32 @@ class VideoMaker:
         # TODO 
 
         # render the video
-        final_clip.write_videofile(self.output_dir)
+        final_clip.write_videofile(self.output_dir + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + '.mp4')
 
         return True
     
     # makes a video from a directory of clips and uses the default transition and content for the channel 
     # specified by channel_name
     @staticmethod
-    async def make_from_channel(channel_name, clip_count=10, output_dir='temp/output.mp4', transition_dir='video_assets/transition.mp4'):
-        # load the app credentials from a file named app_credentials.txt
-        # first line the app id, second line the app secret
-        with open('app_credentials.txt', 'r') as f:
-            APP_ID = f.readline().strip()
-            APP_SECRET = f.readline().strip()
-        USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CLIPS_EDIT]
+    async def make_from_channel(channel_name, clip_count=10, output_dir='temp/output', transition_dir='video_assets/transition.mp4'):
+        # init the twitch authenticator
+        authenticator = TwitchAuthenticator()
 
-        # first lets get the top ten clips of the last day
-        # set up twitch api instance and add user authentication with some scopes
-        twitch_ = await Twitch(APP_ID, APP_SECRET)
-        auth = UserAuthenticator(twitch_, USER_SCOPE)
-        token, refresh_token = await auth.authenticate()
-        await twitch_.set_user_authentication(token, USER_SCOPE, refresh_token)
-
-        # create helix instance to get user id
-        client = twitch.TwitchHelix(client_id=APP_ID, oauth_token=token)
+        # authenticate the bot
+        authenticator.authenticate()
 
         # get user ids
-        users = client.get_users(login_names=[channel_name])
+        users = authenticator.get_users_from_name([channel_name])
 
         clipGetter = ClipGetter()
 
         print("Getting clips for " + users[0].display_name)
 
-        dirs = clipGetter.get_clips(users[0], client, clip_dir='temp/clips', clip_count=clip_count)
+        dirs = clipGetter.get_clips(users[0], authenticator.get_client(), clip_dir='temp/clips', clip_count=clip_count)
 
         print("Got clips... making video")
+
+        # TODO cross reference the clipinfo files to see if there are any of our clips in the top num
 
         # now lets make the video
         video_maker = VideoMaker(dirs, output_dir, transition_dir=transition_dir)
@@ -87,7 +83,11 @@ class VideoMaker:
 
         # delete the clips
         for dir_ in dirs:
-            os.remove(dir_)
+            try:
+                os.remove(dir_)
+            except OSError:
+                # if one file is not deleted its not a big deal
+                pass
 
 
 
