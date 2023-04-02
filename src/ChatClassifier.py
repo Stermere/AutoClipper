@@ -12,6 +12,7 @@ from src.ChatStats import ChatStats
 from src.ClipGetter import ClipGetter
 from src.ClipCompiler import ClipCompiler
 from src.Clip import Clip
+from src.TwitchAuthenticator import TwitchAuthenticator
 import concurrent.futures
 import os
 
@@ -49,12 +50,11 @@ class ChatClassifier:
         self.live_channels = []
 
         # we will store the twitch api instance, the authentication instance, the chat instance and the tokens here
-        self.twitch = None
-        self.auth = None
         self.chat = None
         self.users = None
-        self.token, self.refresh_token = None, None
-        self.client = None
+
+        # authenticator 
+        self.authenticator = None
 
         # initialize the sentiment analyzer (VADER)
         self.analyzer = SentimentIntensityAnalyzer()
@@ -78,7 +78,7 @@ class ChatClassifier:
     async def quit(self):
         # now we can close the chat bot and the twitch api client
         self.chat.stop()
-        await self.twitch.close()
+        await self.authenticator.end_session()
         
     # this will be called when the event READY is triggered, which will be on bot start
     async def on_ready(self, ready_event: EventData):
@@ -118,7 +118,7 @@ class ChatClassifier:
             await asyncio.sleep(60)
 
              # check who is live and only clip those who are live
-            streams = self.client.get_streams(user_ids=[user.id for user in self.users])
+            streams = self.authenticator.get_streams(user_ids=[user.id for user in self.users])
             live_channels = [stream['user_login'] for stream in streams]
 
             # get the difference between the live channels and the channels that are currently live
@@ -180,7 +180,7 @@ class ChatClassifier:
 
             # try to create a clip
             try:
-                clip = await self.twitch.create_clip(user.id, has_delay=True)
+                clip = await self.authenticator.get_twitch().create_clip(user.id, has_delay=True)
 
             # exception handling
             except TwitchResourceNotFound as e:
@@ -201,21 +201,21 @@ class ChatClassifier:
             with open('clip_edit_urls.csv', 'a') as f:
                 f.write(f'{clip.edit_url}, {self.chats[channel].stats[-1].message_count}\n')
 
-        # get the clipa from the twitch api and download it
+        # get the clip from the twitch api and store its info in a file
         # if after 15 seconds the clip is still not ready, assume it failed (from twitch themselves)
         if (clips != []):
-            print(f'\tWaiting for twitch...')
             await asyncio.sleep(15)
+            # clip_info is the clips objects from the twitch api not Clip.py
+            clip_info = self.authenticator.get_client().get_clips(clip_ids=[clip.id for clip, user in clips])
+
+            # replace the clip objects with the clip objects from the twitch api
+            for i in range(len(clips)):
+                clips[i] = (clip_info[i], clips[i][1])
+
             for clip, user in clips:
-                clip = self.client.get_clips(clip_ids=[clip.id])
-                if (len(clip) == 0):
-                    print(f'\tFailed to download clip of {user.display_name}')
-                    continue
-                clip = clip[0]
+                # download the clip
                 clip_dir = self.clip_getter.download_clip(clip, user)
 
-                print(f'\tClip downloaded ({user.display_name}): {clip["url"]}')
-                
                 # convert to a clip object for easy saving and loading
                 clip_obj = Clip(clip_dir, clip['id'], clip['broadcaster_id'], clip['broadcaster_name'], datetime.datetime.fromisoformat(str(clip['created_at'])), clip['duration'], clip['view_count'])
 
@@ -229,20 +229,17 @@ class ChatClassifier:
                 
     # this is where we set up the bot
     async def run(self):
-        # set up twitch api instance and add user authentication with some scopes
-        self.twitch = await Twitch(APP_ID, APP_SECRET)
-        self.auth = UserAuthenticator(self.twitch, USER_SCOPE)
-        self.token, refresh_token = await self.auth.authenticate()
-        await self.twitch.set_user_authentication(self.token, USER_SCOPE, refresh_token)
+        # initialize the twitch authenticator
+        self.authenticator = TwitchAuthenticator()
 
-        # create helix instance to get user id
-        self.client = twitch.TwitchHelix(client_id=APP_ID, oauth_token=self.token)
+        # authenticate the bot
+        await self.authenticator.authenticate()
 
         # get user ids
-        self.users = self.client.get_users(login_names=TARGET_CHANNELS)
+        self.users = self.authenticator.get_users_from_names(TARGET_CHANNELS)
 
         # check who is live and only clip those who are live
-        streams = self.client.get_streams(user_ids=[user.id for user in self.users])
+        streams = self.authenticator.get_streams([user.id for user in self.users])
         self.live_channels = [stream['user_login'] for stream in streams]
         print(f'Live channels: {self.live_channels}')
 
@@ -251,7 +248,7 @@ class ChatClassifier:
         self.second_loop_task = asyncio.create_task(self.second_loop())
 
         # create chat instance
-        self.chat = await Chat(self.twitch)
+        self.chat = await Chat(self.authenticator.get_twitch())
 
         # register the handlers for the events you want to listen to
         # listen to when the bot is done starting up and ready to join channels
@@ -275,11 +272,11 @@ class ChatClassifier:
             await loop.run_in_executor(pool, input, "Press enter to exit\n")
 
 
-#   TODO's  1. make the video maker class
+#   TODO's  DONE 1. make the video maker class
 #           2. The moment a streamer is no longer live, start a timer for n minutes
 #              and then download the top 10 clips from the last length of stream (high quality human made clips (presumably))
 #           3. upload the video to youtube 
-#           4. find a way to automatically name our clips (drastically improves view count)
+#          4. find a way to name our clips automatically
 
 # entry point
 def main(args):
