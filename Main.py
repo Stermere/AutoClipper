@@ -21,7 +21,7 @@ if __name__ == '__main__':
         asyncio.run(VideoMaker.make_from_channel(sys.argv[2]))
     elif sys.argv[1] == '-c':
         # check for the second arg of the csv file specifying the clips
-        if len(sys.argv) < 3 and sys.argv[2].endswith('.csv'):
+        if len(sys.argv) < 3 or  not sys.argv[2].endswith('.csv'):
             print('Usage: python3 Main.py -c <csv_file_dir>')
             exit(0)
         ClipCompiler().merge_clips(sys.argv[2])
