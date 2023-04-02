@@ -7,7 +7,8 @@ from copy import deepcopy
 import os
 import numpy as np
 
-USE_FROM_CSV = 1200
+USE_FROM_CSV = 200
+MAX_CHATS_TIME_WINDOW = 60 * 60
 CLIP_THRESHOLD = 0.85
 STAT_CALC_INTERVAL = 1
 INCLUDE_INTERVAL = 10
@@ -69,8 +70,9 @@ class ChatStats:
 
     # set the should_clip flag to true if the chat spiked
     def check_for_clip(self):
-        if (len(self.stats) > USE_FROM_CSV) and (self.last_clip + datetime.timedelta(seconds=GUANANTEED_CLIP_LENGTH) < datetime.datetime.now()):
-            max_chats = np.max([stat.message_count for stat in self.stats[-USE_FROM_CSV:]])
+        chat_list = [stat.message_count for stat in self.stats if ((np.datetime64(datetime.datetime.now()) - stat.time).astype('timedelta64[s]').astype(np.int32) < MAX_CHATS_TIME_WINDOW)]
+        if (len(self.stats) > USE_FROM_CSV) and (self.last_clip + datetime.timedelta(seconds=GUANANTEED_CLIP_LENGTH) < datetime.datetime.now()) and len(chat_list) > USE_FROM_CSV:
+            max_chats = np.max(chat_list)
             if self.stats[-1].message_count > max_chats * CLIP_THRESHOLD:
                 self.should_clip = True
                 
@@ -107,7 +109,7 @@ class ChatStats:
         text_data = [msg.encode('ascii', 'ignore').decode('ascii') for msg in text_data]
 
         # add the stats to the list
-        self.stats.append(ChatStatsEntry(self.next_update, sentiment, text_data, message_length, message_count, message_count_no_repeats))
+        self.stats.append(ChatStatsEntry(np.datetime64(self.next_update), sentiment, text_data, message_length, message_count, message_count_no_repeats))
 
         # update the last update time (for loop in case we missed an update due to offline time)
         while now >= self.next_update:
@@ -136,9 +138,7 @@ class ChatStats:
         # convert the numpy array to a list of ChatStatsEntry objects
         stats = [ChatStatsEntry(stat[4], stat[0], stat[5], stat[1], stat[2], stat[3]) for stat in stats]
 
-        # truncate to the last USE_FROM_CSV entries
-        if len(stats) > USE_FROM_CSV:
-            stats = stats[-USE_FROM_CSV:]
+        # TODO don't load the entire file into memory
         
         return stats
 

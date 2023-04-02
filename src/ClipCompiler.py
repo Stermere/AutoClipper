@@ -91,7 +91,7 @@ class ClipCompiler:
         entry1, fps1, frame_count_1 = self.get_frame(clip1)
 
         # merge poing vars
-        merge_point_1 = frame_count_1 - 1
+        merge_point_1 = frame_count_1
         merge_point_2 = None
 
         # prepare the stream for the seconds clip
