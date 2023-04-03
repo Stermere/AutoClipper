@@ -31,11 +31,18 @@ class TwitchAuthenticator:
         # create helix instance to get user id
         self.client = twitch.TwitchHelix(client_id=TwitchAuthenticator.APP_ID, oauth_token=self.token)
 
-    async def reathenticate(self):
-        # reauthenticate the user
-        self.token, self.refresh_token = await self.auth.authenticate()
-        await self.twitch.set_user_authentication(self.token, TwitchAuthenticator.USER_SCOPE, self.refresh_token)
-        self.client = twitch.TwitchHelix(client_id=TwitchAuthenticator.APP_ID, oauth_token=self.token)
+        # set up the refresh callbacks
+        self.twitch.app_auth_refresh_callback = self.app_refresh
+        self.twitch.user_auth_refresh_callback = self.user_refresh
+
+    async def user_refresh(self, token, refresh_token):
+        self.token = token
+        self.refresh_token = refresh_token
+        print(f'New user token: {token}')
+
+    async def app_refresh(self, token):
+        self.token = token
+        print(f'New app token: {token}')
 
     async def end_session(self):
         # end the user session

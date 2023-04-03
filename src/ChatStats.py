@@ -138,8 +138,6 @@ class ChatStats:
         # convert the numpy array to a list of ChatStatsEntry objects
         stats = [ChatStatsEntry(stat[4], stat[0], stat[5], stat[1], stat[2], stat[3]) for stat in stats]
 
-        # TODO don't load the entire file into memory
-        
         return stats
 
     # saves the stats to a file in csv format
