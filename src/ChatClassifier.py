@@ -27,7 +27,7 @@ with open('app_credentials.txt', 'r') as f:
 with open('target_channels.txt', 'r') as f:
     TARGET_CHANNELS = f.readlines()
     TARGET_CHANNELS = [channel.strip() for channel in TARGET_CHANNELS]
-#TARGET_CHANNELS = ['shroud']
+#TARGET_CHANNELS = ['filian']
 
 USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CLIPS_EDIT]
 DEFAULT_READY_CHANNEL_CSV = 'clip_info/saturated_channels.csv'

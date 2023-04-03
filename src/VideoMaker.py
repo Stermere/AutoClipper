@@ -15,6 +15,7 @@ DEFAULT_TRANSITION_DIR = 'video_assets/transition.mp4'
 DEFAULT_OUTPUT_DIR = 'temp/output/'
 DEFAULT_CLIP_DIR = 'temp/clips/'
 DEFAULT_READY_CHANNEL_CSV = 'clip_info/saturated_channels.csv'
+TARGET_VIDEO_LENGTH = 5 * 60 # 5 minutes
 
 class VideoMaker:
     def __init__(self, clip_dirs, output_dir, intro_clip_dir=None, outro_clip_dir=None, transition_dir=None):
@@ -47,6 +48,11 @@ class VideoMaker:
 
         # get the combined video
         final_clip = concatenate_videoclips(videos, method="compose")
+    
+        # check the length of the video
+        if not self.check_time(final_clip, TARGET_VIDEO_LENGTH):
+            print("The video for is too short was only " + str(final_clip.duration) + " seconds long")
+            return False
 
         # now that we have all the clips lets add some visual effects
         # TODO 
@@ -57,6 +63,11 @@ class VideoMaker:
         # render the video
         final_clip.write_videofile(self.output_dir + streamer_name + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + '.mp4')
 
+        return True
+    
+    def check_time(self, clip, target_time):
+        if (clip.duration < target_time):
+            return False
         return True
     
     # makes a video from a directory of clips and uses the default transition and content for the channel 
@@ -145,11 +156,15 @@ class VideoMaker:
         # load in the csv
         with open(csv_dir, 'r') as f:
             dirs = f.readlines()
+        
+        # remove the new line characters
+        for i in range(len(dirs)):
+            dirs[i] = dirs[i].replace('\n', '')
 
         # combine any clips that overlap
         clip_compiler = ClipCompiler()
         for dir_ in dirs:
-            clip_compiler.compile_clips(dir_)
+            clip_compiler.merge_clips(dir_)
 
         # make a video for each channel
         for dir_ in dirs:
