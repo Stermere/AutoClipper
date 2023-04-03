@@ -30,10 +30,9 @@ with open('target_channels.txt', 'r') as f:
 #TARGET_CHANNELS = ['shroud']
 
 USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CLIPS_EDIT]
+DEFAULT_READY_CHANNEL_CSV = 'clip_info/saturated_channels.csv'
 TIME_WINDOW = 10
 STAT_INTERVAL = 1
-
-# optional - print the chat messages to the console but carraige return before each message
 PRINT_CHAT = False
 
 # this is the main class that will handle the chat bot
@@ -139,9 +138,11 @@ class ChatClassifier:
             self.live_channels = live_channels
 
             # register any channel that went offline as a channel to get clips from in the future
-            for channel in old:
-                # TODO
-                pass
+            with open(DEFAULT_READY_CHANNEL_CSV, 'a') as f:
+                for channel in old:
+                    # write the csv file directory
+                    user = self.authenticator.get_users_from_names([channel])[0]
+                    f.write(ChatClassifier.CLIP_INFO_SAVE_NAME(user) + '\n')
             
     # gets called every time there is a subscription event
     async def on_sub(self, sub: ChatSub):
@@ -273,10 +274,7 @@ class ChatClassifier:
 
 
 #   TODO's  DONE 1. make the video maker class
-#           2. The moment a streamer is no longer live, start a timer for n minutes
-#              and then download the top 10 clips from the last length of stream (high quality human made clips (presumably))
-#           3. upload the video to youtube 
-#          4. find a way to name our clips automatically
+#           2. make a config file for all the settings            
 
 # entry point
 def main(args):

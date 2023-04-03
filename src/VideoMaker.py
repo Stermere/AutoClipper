@@ -3,6 +3,7 @@ from moviepy.editor import *
 
 from src.ClipGetter import ClipGetter
 from src.Clip import Clip
+from src.ClipCompiler import ClipCompiler
 from src.TwitchAuthenticator import TwitchAuthenticator
 import datetime
 
@@ -13,6 +14,7 @@ SORT_BY_TIME = True
 DEFAULT_TRANSITION_DIR = 'video_assets/transition.mp4'
 DEFAULT_OUTPUT_DIR = 'temp/output/'
 DEFAULT_CLIP_DIR = 'temp/clips/'
+DEFAULT_READY_CHANNEL_CSV = 'clip_info/saturated_channels.csv'
 
 class VideoMaker:
     def __init__(self, clip_dirs, output_dir, intro_clip_dir=None, outro_clip_dir=None, transition_dir=None):
@@ -136,6 +138,23 @@ class VideoMaker:
         # remove all the clips from the csv
         with open(csv_dir, 'w') as f:
             f.write('')
+
+    # makes all a video from each csv specified in the csv provided
+    @staticmethod
+    async def make_from_csvs(csv_dir=DEFAULT_READY_CHANNEL_CSV):
+        # load in the csv
+        with open(csv_dir, 'r') as f:
+            dirs = f.readlines()
+
+        # combine any clips that overlap
+        clip_compiler = ClipCompiler()
+        for dir_ in dirs:
+            clip_compiler.compile_clips(dir_)
+
+        # make a video for each channel
+        for dir_ in dirs:
+            await VideoMaker.make_from_csv(dir_)
+
 
 
 

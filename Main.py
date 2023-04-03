@@ -36,8 +36,10 @@ if __name__ == '__main__':
         pass
 
     elif sys.argv[1] == '-run_pipeline':
-        # run the clip compiler and then the video maker on every csv file in the directory
-        pass
+        # run the clip compiler and then the video maker on every csv 
+        # file in the directory if there is a clip older than 8 hours
+        # and the total length of the clips is greater than 5 minutes 
+        asyncio.run(VideoMaker.make_from_csvs())
         
     else:
         print('how did you get here?')
