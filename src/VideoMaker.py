@@ -15,7 +15,7 @@ DEFAULT_TRANSITION_DIR = 'video_assets/transition.mp4'
 DEFAULT_OUTPUT_DIR = 'temp/output/'
 DEFAULT_CLIP_DIR = 'temp/clips/'
 DEFAULT_READY_CHANNEL_CSV = 'clip_info/saturated_channels.csv'
-TARGET_VIDEO_LENGTH = 5 * 60 # 5 minutes
+TARGET_VIDEO_LENGTH = 3 * 60 # 3 minutes
 
 class VideoMaker:
     def __init__(self, clip_dirs, output_dir, intro_clip_dir=None, outro_clip_dir=None, transition_dir=None):
@@ -30,9 +30,15 @@ class VideoMaker:
         # first thing lets combine all the clips in clip_dirs
         videos = []
         for i, clip_dir in enumerate(self.clip_dirs):
+            if not os.path.exists(clip_dir):
+                print("Clip " + clip_dir + " does not exist")
+                continue
             videos.append(VideoFileClip(clip_dir))
             if (i == len(self.clip_dirs) - 1):
                 continue
+            
+            # run the video through the filter TODO
+
             videos.append(VideoFileClip(self.transition_dir).volumex(TRANSITION_VOLUME).subclip(TRANSITION_SUBCLIP[0], TRANSITION_SUBCLIP[1]))
 
         # now lets add the intro and outro clips
@@ -100,7 +106,10 @@ class VideoMaker:
         # now lets make the video
         video_maker = VideoMaker(dirs, output_dir, transition_dir=transition_dir)
 
-        video_maker.make_video()
+        status = video_maker.make_video()
+
+        if not status:
+            return False
 
         # delete the clips
         for dir_ in dirs:
@@ -136,7 +145,10 @@ class VideoMaker:
         # now lets make the video
         video_maker = VideoMaker(dirs, output_dir, transition_dir=transition_dir)
 
-        video_maker.make_video()
+        status = video_maker.make_video()
+
+        if not status:
+            return False
 
         # delete the clips
         for dir_ in dirs:
@@ -169,6 +181,10 @@ class VideoMaker:
         # make a video for each channel
         for dir_ in dirs:
             await VideoMaker.make_from_csv(dir_)
+
+        # remove all the clips from the csv
+        with open(csv_dir, 'w') as f:
+            f.write('')
 
 
 

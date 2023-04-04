@@ -177,9 +177,7 @@ class ChatClassifier:
                 print(f'Failed to find user object for {channel}')
                 continue
 
-            self.chats[channel].set_should_clip(False)
-
-            # try to create a clip
+            # try to create a clip until it works or a fatal error occurs
             try:
                 clip = await self.authenticator.get_twitch().create_clip(user.id, has_delay=True)
 
@@ -199,19 +197,28 @@ class ChatClassifier:
             # add the clip to the list of clips to download
             clips.append((clip, user))
 
+            # update the should clip value
+            self.chats[channel].set_should_clip(False)
+
             with open('clip_edit_urls.csv', 'a') as f:
                 f.write(f'{clip.edit_url}, {self.chats[channel].stats[-1].message_count}\n')
 
         # get the clip from the twitch api and store its info in a file
-        # if after 15 seconds the clip is still not ready, assume it failed (from twitch themselves)
+        # if after 15 seconds the clip is still not ready, assume it failed (this is from twitch them selves but
+        # seems to be a bit untrue sometimes)
         if (clips != []):
-            await asyncio.sleep(15)
+            await asyncio.sleep(30)
             # clip_info is the clips objects from the twitch api not Clip.py
             clip_info = self.authenticator.get_client().get_clips(clip_ids=[clip.id for clip, user in clips])
 
             # replace the clip objects with the clip objects from the twitch api
             for i in range(len(clips)):
-                clips[i] = (clip_info[i], clips[i][1])
+                clip = None
+                for c in clip_info:
+                    if c['broadcaster_id'] == clips[i][1]['id']:
+                        clip = c
+                        break
+                clips[i] = (c, clips[i][1])
 
             for clip, user in clips:
                 # download the clip
