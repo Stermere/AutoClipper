@@ -26,3 +26,7 @@ class Clip:
         split[6] = split[6].strip('\n')
 
         return Clip(split[0], split[1], split[2], split[3], split[4], split[5], split[6])
+    
+    @staticmethod
+    def from_twitch_api_clip(clip, clip_dir):
+        return Clip(clip_dir, clip['id'], clip['broadcaster_id'], clip['broadcaster_name'], datetime.datetime.fromisoformat(str(clip['created_at'])), clip['duration'], clip['view_count'])

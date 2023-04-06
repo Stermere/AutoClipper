@@ -8,13 +8,18 @@ import datetime
 
 class ClipCompiler:
     # given a csv file of clips cluster them into groups where clips overlap and merge them
-    def merge_clips(self, csv_file_dir):
+    # takes a csv file or a list of clips and returns a list of clips that are not overlapping
+    def merge_clips(self, csv_or_cliplist):
         # check if the file exists
-        if not os.path.exists(csv_file_dir):
-            return
+        if not isinstance(csv_or_cliplist, list) and not os.path.exists(csv_or_cliplist):
+            print(f'Error: {csv_or_cliplist} does not exist or is not a list')
+            return 
         
-        # open the csv file
-        clips = self.open_csv(csv_file_dir)
+        if isinstance(csv_or_cliplist, list):
+            clips = csv_or_cliplist
+        else:
+            # open the csv file
+            clips = self.open_csv(csv_or_cliplist)
 
         # if the difference between two clips is less than GUANANTEED_CLIP_LENGTH then merge them
         while True:
@@ -61,7 +66,10 @@ class ClipCompiler:
             print(f'Merged {clips_to_merge[0].clip_dir} and {clips_to_merge[1].clip_dir} into {new_clip.clip_dir}')
 
             # rewrite the csv file
-            self.write_csv(csv_file_dir, clips_to_merge, [new_clip])
+            if not isinstance(csv_or_cliplist, list):
+                self.write_csv(csv_or_cliplist, clips_to_merge, [new_clip])
+
+        return clips
 
     # merges two clips together
     def merge_clip(self, clip1, clip2):
