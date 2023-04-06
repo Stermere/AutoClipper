@@ -25,8 +25,6 @@ class AudioToText():
 
         try:
             self.text = self.recognize_vosk(audio_data)
-
-            # get the time stamp of each word
         finally:
             # delete the temp audio file
             os.remove(TEMP_AUDIO_FILE)
@@ -34,6 +32,7 @@ class AudioToText():
         return self.text
     
     # yoinked from a library I found but it didn't quite do what I needed so I modified it
+    # TODO instead of yoinking I should make a PR to the library
     def recognize_vosk(self, audio_data):
         from vosk import Model, KaldiRecognizer
         
@@ -45,14 +44,13 @@ class AudioToText():
         rec = KaldiRecognizer(self.vosk_model, 16000)
         rec.SetWords(True)
 
-        result = None
-        if rec.AcceptWaveform(audio_data.get_raw_data(convert_rate=16000, convert_width=2)):
-            result = rec.Result()
+        rec.AcceptWaveform(audio_data.get_raw_data(convert_rate=16000, convert_width=2))
+        result = rec.Result()
         
         return result
     
 # test the class
 if __name__ == "__main__":
     audio_to_text = AudioToText()
-    text = audio_to_text.convert_video_to_text("clips/Shylily_MushyExuberantAubergineOneHand-KcZIN0OFUdVm7TAm.mp4")
+    text = audio_to_text.convert_video_to_text("temp/output/filian2023-04-04-14-08-52.mp4")
     print(text)

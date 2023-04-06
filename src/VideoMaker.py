@@ -5,7 +5,9 @@ from src.ClipGetter import ClipGetter
 from src.Clip import Clip
 from src.ClipCompiler import ClipCompiler
 from src.TwitchAuthenticator import TwitchAuthenticator
+from src.AudioToText import AudioToText
 import datetime
+import json
 
 TRANSITION_VOLUME = 0.1
 TRANSITION_SUBCLIP = (2, 2.5)
@@ -15,7 +17,9 @@ DEFAULT_TRANSITION_DIR = 'video_assets/transition.mp4'
 DEFAULT_OUTPUT_DIR = 'temp/output/'
 DEFAULT_CLIP_DIR = 'temp/clips/'
 DEFAULT_READY_CHANNEL_CSV = 'clip_info/saturated_channels.csv'
-TARGET_VIDEO_LENGTH = 3 * 60 # 3 minutes
+TARGET_VIDEO_LENGTH = 1 * 60 # 1 minutes
+LOOK_BACK_TIME = 24 * 7 # 1 week
+
 
 class VideoMaker:
     def __init__(self, clip_dirs, output_dir, intro_clip_dir=None, outro_clip_dir=None, transition_dir=None):
@@ -25,6 +29,8 @@ class VideoMaker:
         self.output_dir = output_dir
         self.transition_dir = transition_dir
 
+        self.audio_to_text = AudioToText()
+
     # makes a video from the clips Returns True if successful
     def make_video(self):
         # first thing lets combine all the clips in clip_dirs
@@ -33,11 +39,21 @@ class VideoMaker:
             if not os.path.exists(clip_dir):
                 print("Clip " + clip_dir + " does not exist")
                 continue
-            videos.append(VideoFileClip(clip_dir))
+
+            # run the video through the filter to get the subclip we want
+            filter_result = self.filter_clips(clip_dir)
+
+            # if None the clip was completely rejected
+            if filter_result == None:
+                continue
+            
+            # add the clip to the list of clips
+            videos.append(filter_result)
+
+            # if this is the last clip then we don't need to add a transition
             if (i == len(self.clip_dirs) - 1):
                 continue
             
-            # run the video through the filter TODO
 
             videos.append(VideoFileClip(self.transition_dir).volumex(TRANSITION_VOLUME).subclip(TRANSITION_SUBCLIP[0], TRANSITION_SUBCLIP[1]))
 
@@ -57,11 +73,11 @@ class VideoMaker:
     
         # check the length of the video
         if not self.check_time(final_clip, TARGET_VIDEO_LENGTH):
-            print("The video for is too short was only " + str(final_clip.duration) + " seconds long")
+            print("The video is only " + str(final_clip.duration) + " seconds long aborting...")
             return False
 
         # now that we have all the clips lets add some visual effects
-        # TODO 
+        # TODO
 
         # get the streamer name from the first clip
         streamer_name = self.clip_dirs[0].split('/')[-1].split('_')[0]
@@ -76,10 +92,63 @@ class VideoMaker:
             return False
         return True
     
+    # filter the clips to not include time periods where the streamer is not talking
+    def filter_clips(self, clip_dir):
+        text_data = self.audio_to_text.convert_video_to_text(clip_dir)
+        # convert the json to a dict
+        text_data = json.loads(text_data)
+
+
+        text_times = text_data["result"]
+        text = text_data["text"]
+
+        # load the clip 
+        clip_video = VideoFileClip(clip_dir)
+
+        print("Clip length before trim: " + str(clip_video.duration))
+
+        clip_video = self.trim_clip(clip_video, text_times)
+
+        # if the clip was rejected then return None
+        if clip_video == None:
+            print("Clip to short after trimming rejecting...")
+            return None
+        
+        print("Clip length after trim: " + str(clip_video.duration))
+
+        return clip_video
+    
+    # trims the clip to remove silence at the end and beginning
+    def trim_clip(self, clip, text_times):
+        # the variable to store the desired start and end times
+        start_time = 0
+        end_time = 0
+        
+        # filter out the begining and end silence
+        for i in range(len(text_times)):
+            # if a word took unusally long to say we know to filter that section out
+            if (text_times[i]["end"] - text_times[i]["start"] < 1.0):
+                start_time = text_times[i]["start"]
+                break
+        
+        for i in range(len(text_times) - 1, 0, -1):
+            # if a word took unusally long to say we know to filter that section out
+            if (text_times[i]["end"] - text_times[i]["start"] < 1.0):
+                end_time = text_times[i]["end"]
+                break
+
+        # if the start and end times are to close then we reject the clip
+        if (end_time - start_time < 5):
+            return None
+        
+        
+        return clip.subclip(start_time, end_time)
+
+
     # makes a video from a directory of clips and uses the default transition and content for the channel 
     # specified by channel_name
     @staticmethod
-    async def make_from_channel(channel_name, clip_count=10, output_dir=DEFAULT_OUTPUT_DIR, transition_dir=DEFAULT_TRANSITION_DIR):
+    async def make_from_channel(channel_name, clip_count=15, output_dir=DEFAULT_OUTPUT_DIR, transition_dir=DEFAULT_TRANSITION_DIR):
         # init the twitch authenticator
         authenticator = TwitchAuthenticator()
 
@@ -93,7 +162,7 @@ class VideoMaker:
 
         print("Getting clips for " + users[0].display_name)
 
-        dirs = clipGetter.get_clips(users[0], authenticator.get_client(), clip_dir=DEFAULT_CLIP_DIR, clip_count=clip_count)
+        dirs = clipGetter.get_clips(users[0], authenticator.get_client(), time=LOOK_BACK_TIME, clip_dir=DEFAULT_CLIP_DIR, clip_count=clip_count, sort_by_time=SORT_BY_TIME)
 
         print("Got clips... making video")
 
