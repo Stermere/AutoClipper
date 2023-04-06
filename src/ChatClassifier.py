@@ -30,7 +30,6 @@ with open('target_channels.txt', 'r') as f:
 #TARGET_CHANNELS = ['filian']
 
 USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CLIPS_EDIT]
-DEFAULT_READY_CHANNEL_CSV = 'clip_info/saturated_channels.csv'
 TIME_WINDOW = 10
 STAT_INTERVAL = 1
 PRINT_CHAT = False
@@ -38,7 +37,7 @@ PRINT_CHAT = False
 # this is the main class that will handle the chat bot
 class ChatClassifier:
     # takes a twitch user object and returns the path to the csv file that stores the clip info for that user
-    CLIP_INFO_SAVE_NAME = lambda x : f'clip_info/{x.display_name}.csv'
+    CLIP_INFO_SAVE_NAME = lambda x : f'temp/clips/{x.display_name}.csv'
     CLIP_INFO_DIR = 'clip_info'
 
     # prepare a dictionary to store the messages in by channel
@@ -136,13 +135,6 @@ class ChatClassifier:
             if len(old) > 0:
                 print(f'Old channels offline: {old}')
             self.live_channels = live_channels
-
-            # register any channel that went offline as a channel to get clips from in the future
-            with open(DEFAULT_READY_CHANNEL_CSV, 'a') as f:
-                for channel in old:
-                    # write the csv file directory
-                    user = self.authenticator.get_users_from_names([channel])[0]
-                    f.write(ChatClassifier.CLIP_INFO_SAVE_NAME(user) + '\n')
             
     # gets called every time there is a subscription event
     async def on_sub(self, sub: ChatSub):
@@ -281,7 +273,9 @@ class ChatClassifier:
 
 
 #   TODO's  DONE 1. make the video maker class
-#           2. make a config file for all the settings            
+#           2. make a config file for all the settings
+#           3. make a class for handling the LLM model
+#           4. make it so that when creating clips from a streamer it also uses our clips from that streamer if possible
 
 # entry point
 def main(args):

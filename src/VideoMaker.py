@@ -16,9 +16,15 @@ SORT_BY_TIME = True
 DEFAULT_TRANSITION_DIR = 'video_assets/transition.mp4'
 DEFAULT_OUTPUT_DIR = 'temp/output/'
 DEFAULT_CLIP_DIR = 'temp/clips/'
+DEFAULT_CLIP_INFO_DIR = 'clip_info/'
 DEFAULT_READY_CHANNEL_CSV = 'clip_info/saturated_channels.csv'
 TARGET_VIDEO_LENGTH = 1 * 60 # 1 minutes
 LOOK_BACK_TIME = 24 * 7 # 1 week
+REQUIRED_CLIP_NUM = 10
+
+# these do not need to be changed
+SPOKEN_WORD_TRIM = 3.0
+MIN_CLIP_LENGTH = 5.0
 
 
 class VideoMaker:
@@ -50,12 +56,11 @@ class VideoMaker:
             # add the clip to the list of clips
             videos.append(filter_result)
 
-            # if this is the last clip then we don't need to add a transition
-            if (i == len(self.clip_dirs) - 1):
-                continue
-            
-
             videos.append(VideoFileClip(self.transition_dir).volumex(TRANSITION_VOLUME).subclip(TRANSITION_SUBCLIP[0], TRANSITION_SUBCLIP[1]))
+
+        # if this is the last clip then we don't the transition
+        if (len(videos) > 0):
+            videos.pop()    
 
         # now lets add the intro and outro clips
         if (self.intro_clip_dir != None):
@@ -127,18 +132,18 @@ class VideoMaker:
         # filter out the begining and end silence
         for i in range(len(text_times)):
             # if a word took unusally long to say we know to filter that section out
-            if (text_times[i]["end"] - text_times[i]["start"] < 1.0):
+            if (text_times[i]["end"] - text_times[i]["start"] < SPOKEN_WORD_TRIM):
                 start_time = text_times[i]["start"]
                 break
         
         for i in range(len(text_times) - 1, 0, -1):
             # if a word took unusally long to say we know to filter that section out
-            if (text_times[i]["end"] - text_times[i]["start"] < 1.0):
+            if (text_times[i]["end"] - text_times[i]["start"] < SPOKEN_WORD_TRIM):
                 end_time = text_times[i]["end"]
                 break
 
         # if the start and end times are to close then we reject the clip
-        if (end_time - start_time < 5):
+        if (end_time - start_time < MIN_CLIP_LENGTH):
             return None
         
         
@@ -158,15 +163,20 @@ class VideoMaker:
         # get user ids
         users = authenticator.get_users_from_names([channel_name])
 
+        if not users:
+            print("Could not find user " + channel_name)
+            return False
+
         clipGetter = ClipGetter()
 
         print("Getting clips for " + users[0].display_name)
 
-        dirs = clipGetter.get_clips(users[0], authenticator.get_client(), time=LOOK_BACK_TIME, clip_dir=DEFAULT_CLIP_DIR, clip_count=clip_count, sort_by_time=SORT_BY_TIME)
+        clips = clipGetter.get_clips(users[0], authenticator.get_client(), time=LOOK_BACK_TIME, clip_dir=DEFAULT_CLIP_DIR, clip_count=clip_count, sort_by_time=SORT_BY_TIME)
+        dirs = [clip.clip_dir for clip in clips]
 
         print("Got clips... making video")
 
-        # TODO cross reference the clipinfo files to see if there are any of our clips in the top num
+        # TODO cross reference the clipinfo files to see if there are any of our clips in the top num 
 
         # make sure the output dir exists
         if not os.path.exists(output_dir):
@@ -197,6 +207,11 @@ class VideoMaker:
             lines = f.readlines()
         for line in lines:
             clips.append(Clip.from_string(line))
+
+        # only proceed if there are at least REQUIRED_CLIPS clips
+        if len(clips) < REQUIRED_CLIP_NUM:
+            print("Not enough clips to make a video")
+            return False
 
         # sort the clips by time
         if (SORT_BY_TIME):
@@ -233,14 +248,14 @@ class VideoMaker:
 
     # makes all a video from each csv specified in the csv provided
     @staticmethod
-    async def make_from_csvs(csv_dir=DEFAULT_READY_CHANNEL_CSV):
-        # load in the csv
-        with open(csv_dir, 'r') as f:
-            dirs = f.readlines()
+    async def make_from_csvs(clip_info=DEFAULT_CLIP_INFO_DIR):
+        # get a count of the videos per channel by reading the csv's in the clip info dir
+        dirs = os.listdir(clip_info)
         
-        # remove the new line characters
-        for i in range(len(dirs)):
-            dirs[i] = dirs[i].replace('\n', '')
+        for dir_ in dirs:
+            print(dir_)
+
+        return
 
         # combine any clips that overlap
         clip_compiler = ClipCompiler()

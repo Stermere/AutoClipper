@@ -3,6 +3,8 @@ import os
 import requests
 import datetime
 from datetime import timezone
+from src.ClipCompiler import ClipCompiler
+from src.Clip import Clip
 
 # handles getting and downloading clips
 class ClipGetter:
@@ -45,14 +47,20 @@ class ClipGetter:
 
         print(f'Found {len(clips)} clips for {user.display_name} in the last {time} hours')
         
-        # download the clips
+        # download the clips and create a list of clip objects
+        clips_temp = []
         for clip in clips[:clip_count]:
-            self.download_clip(clip, user, clip_dir)
+            dir_ = self.download_clip(clip, user, clip_dir)
+            clips_temp.append(Clip.from_twitch_api_clip(clip, dir_))
+        clips = clips_temp
 
-        # TODO combine any overlapping clips
 
-        # return a list of the clips directory
-        return [f'{clip_dir}/{user.display_name}_{clip.id}.mp4' for clip in clips[:clip_count]]
+        # combine any overlapping clips
+        clip_compiler = ClipCompiler()
+        clips = clip_compiler.merge_clips(clips)
+
+        # return the clips
+        return clips
     
     async def get_clips_delay(self, delay, user, client, time=24, clip_dir='temp/clips', clip_count=15):
         pass
