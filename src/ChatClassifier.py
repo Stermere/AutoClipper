@@ -218,7 +218,7 @@ class ChatClassifier:
                     if c['broadcaster_id'] == clips[i][1]['id']:
                         clip = c
                         break
-                clips[i] = (c, clips[i][1])
+                clips[i] = (clip, clips[i][1])
 
             for clip, user in clips:
                 # download the clip
