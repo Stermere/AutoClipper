@@ -1,7 +1,11 @@
 # given a video clip returns the text in the clip 
 import speech_recognition as sr
+import noisereduce as nr
+from pydub import AudioSegment
+from scipy.io import wavfile as wav
 from moviepy.editor import VideoFileClip
 import os
+import numpy as np
 
 TEMP_AUDIO_FILE = "temp/audio.wav"
 
@@ -18,6 +22,29 @@ class AudioToText():
 
         # save the audio as a wav file
         audio.write_audiofile(TEMP_AUDIO_FILE, codec="pcm_s16le")
+
+        # convert the audio to mono
+        sound = AudioSegment.from_file(TEMP_AUDIO_FILE, format="wav")
+        sound = sound.set_channels(1)
+
+        # match the target amplitude
+        sound = self.match_target_amplitude(sound, -20.0)
+
+        # export the audio file
+        sound.export(TEMP_AUDIO_FILE, format="wav")
+
+        # reshape the data so that it can be fed into the noise reduction algorithm
+        rate, data = wav.read(TEMP_AUDIO_FILE)
+        orig_shape = data.shape 
+        data = np.reshape(data, (2, -1))
+
+        # perform noise reduction
+        reduced_noise = nr.reduce_noise(y=data, sr=rate, n_fft=512)
+
+        # rewrite the audio file
+        reduced_noise = np.reshape(reduced_noise, orig_shape)
+        wav.write(TEMP_AUDIO_FILE, rate, reduced_noise)
+
 
         with sr.AudioFile(TEMP_AUDIO_FILE) as source:
             # listen for the data (load audio to memory)
@@ -49,8 +76,13 @@ class AudioToText():
         
         return result
     
+    # a helper function to match the target amplitude of the audio file
+    def match_target_amplitude(self, sound, target_dBFS):
+        change_in_dBFS = target_dBFS - sound.dBFS
+        return sound.apply_gain(change_in_dBFS)
+    
 # test the class
 if __name__ == "__main__":
     audio_to_text = AudioToText()
-    text = audio_to_text.convert_video_to_text("temp/output/filian2023-04-04-14-08-52.mp4")
+    text = audio_to_text.convert_video_to_text("temp/output/filian2023-04-05-17-54-25.mp4")
     print(text)

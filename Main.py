@@ -31,6 +31,7 @@ if __name__ == '__main__':
             exit(0)
         ClipCompiler().merge_clips(sys.argv[2])
 
+
     elif sys.argv[1] == '-clean':
         # remove all the clips and csv files in the directorys
         pass
@@ -43,5 +44,7 @@ if __name__ == '__main__':
         
     else:
         print('how did you get here?')
+
+    quit(1)
 
 
