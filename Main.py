@@ -22,7 +22,12 @@ if __name__ == '__main__':
         if sys.argv[2].endswith('.csv'):
             asyncio.run(VideoMaker.make_from_csv(sys.argv[2]))
         else:
-            asyncio.run(VideoMaker.make_from_channel(sys.argv[2]))
+            # check for the third arg of the time
+            if len(sys.argv) < 4:
+                print('Usage: python3 Main.py -v channel_name/clip_dir time')
+                exit(0)
+            
+            asyncio.run(VideoMaker.make_from_channel(sys.argv[2], time=float(sys.argv[3])))
 
     elif sys.argv[1] == '-c':
         # check for the second arg of the csv file specifying the clips
@@ -36,15 +41,15 @@ if __name__ == '__main__':
         # remove all the clips and csv files in the directorys
         pass
 
-    elif sys.argv[1] == '-run_pipeline':
+    elif sys.argv[1] == '-auto':
         # run the clip compiler and then the video maker on every csv 
         # file in the directory if there is a clip older than 8 hours
         # and the total length of the clips is greater than 5 minutes 
         asyncio.run(VideoMaker.make_from_csvs())
         
     else:
-        print('how did you get here?')
-
+        print('Usage: python3 Main.py <task>\n <task> can be one of the following:\n-l: lurk chat\n-v render a video\n-c combine clips\n--h: help menu (this menu)')
+        
     quit(1)
 
 
