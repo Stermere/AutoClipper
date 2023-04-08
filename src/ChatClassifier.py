@@ -37,8 +37,8 @@ PRINT_CHAT = False
 # this is the main class that will handle the chat bot
 class ChatClassifier:
     # takes a twitch user object and returns the path to the csv file that stores the clip info for that user
-    CLIP_INFO_SAVE_NAME = lambda x : f'temp/clips/{x.display_name}.csv'
     CLIP_INFO_DIR = 'clip_info'
+    CLIP_INFO_SAVE_NAME = lambda x : f'{ChatClassifier.CLIP_INFO_DIR}/{x.display_name}.csv'
 
     # prepare a dictionary to store the messages in by channel
     def __init__(self):
@@ -171,7 +171,7 @@ class ChatClassifier:
 
             # try to create a clip until it works or a fatal error occurs
             try:
-                clip = await self.authenticator.get_twitch().create_clip(user.id, has_delay=True)
+                clip = await self.authenticator.get_twitch().create_clip(user.id, has_delay=False)
 
             # exception handling
             except TwitchResourceNotFound as e:
@@ -204,13 +204,19 @@ class ChatClassifier:
             clip_info = self.authenticator.get_client().get_clips(clip_ids=[clip.id for clip, user in clips])
 
             # replace the clip objects with the clip objects from the twitch api
+            clips_temp = []
             for i in range(len(clips)):
                 clip = None
                 for c in clip_info:
                     if c['broadcaster_id'] == clips[i][1]['id']:
                         clip = c
                         break
-                clips[i] = (clip, clips[i][1])
+                if clip is None:
+                    print("Failed to download clip")
+                    continue
+                clips_temp.append((clip, clips[i][1]))
+            
+            clips = clips_temp
 
             for clip, user in clips:
                 # download the clip

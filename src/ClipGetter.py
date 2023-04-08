@@ -6,18 +6,24 @@ from datetime import timezone
 from src.ClipCompiler import ClipCompiler
 from src.Clip import Clip
 
+DEFAULT_SAVE_DIR = 'temp/clips'
+
 # handles getting and downloading clips
 class ClipGetter:
     # takes a clip and a user object and downloads the clip to the clips folder
-    def download_clip(self, clip, user, clip_dir='clips'):
+    def download_clip(self, clip, user, clip_dir=DEFAULT_SAVE_DIR):
+        if (clip == None):
+            print('Clip is None')
+            return None
+
         # download the clip
         index = clip['thumbnail_url'].find('-preview')
         clip_url = clip['thumbnail_url'][:index] + '.mp4'
         clip_name = f'{clip_dir}/{user.display_name}_{clip.id}.mp4'
         r = requests.get(clip_url)
         if r.headers['Content-Type'] == 'binary/octet-stream':
-            if not os.path.exists('clips'):
-                os.mkdir('clips')
+            if not os.path.exists(clip_dir):
+                os.mkdirs(clip_dir, exist_ok=True)
             with open(clip_name, 'wb') as f:
                 f.write(r.content)
 

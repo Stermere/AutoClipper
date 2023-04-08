@@ -38,6 +38,9 @@ class TwitchAuthenticator:
     async def user_refresh(self, token, refresh_token):
         self.token = token
         self.refresh_token = refresh_token
+        await self.twitch.set_user_authentication(self.token, TwitchAuthenticator.USER_SCOPE, self.refresh_token)
+        self.client = twitch.TwitchHelix(client_id=TwitchAuthenticator.APP_ID, oauth_token=self.token)
+
         print(f'New user token: {token}')
 
     async def app_refresh(self, token):

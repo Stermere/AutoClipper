@@ -36,7 +36,7 @@ class AudioToText():
         # reshape the data so that it can be fed into the noise reduction algorithm
         rate, data = wav.read(TEMP_AUDIO_FILE)
         orig_shape = data.shape 
-        data = np.reshape(data, (2, -1))
+        data = np.reshape(data, (1, -1))
 
         # perform noise reduction
         reduced_noise = nr.reduce_noise(y=data, sr=rate, n_fft=512)
