@@ -6,6 +6,8 @@ import numpy as np
 from src.Clip import Clip
 import datetime
 
+MAX_DIFFERENCE = 1000
+
 class ClipCompiler:
     # given a csv file of clips cluster them into groups where clips overlap and merge them
     # takes a csv file or a list of clips and returns a list of clips that are not overlapping
@@ -21,28 +23,28 @@ class ClipCompiler:
             # open the csv file
             clips = self.open_csv(csv_or_cliplist)
 
-        # if the difference between two clips is less than GUANANTEED_CLIP_LENGTH then merge them
-        while True:
+        # compare each clip to the next clip and merge them if they overlap
+        i = 0
+        while i < len(clips) - 1:
+            # sort the clips by time
+            clips.sort(key=lambda x: x.time)
 
-            # get two overlapping clips
-            clips_to_merge = self.find_overlapping_clip(clips)
-            
-            # if there are none then break
-            if clips_to_merge == None:
-                break
+            # get two possible clips to merge
+            clips_to_merge = self.get_clips_to_merge(clips, i)
 
-            print('Found overlapping clips attempting merge...')
+            print('Attempting merge...')
             
             # merge the clips
             merged_clip = self.merge_clip(clips_to_merge[0], clips_to_merge[1])
+
+            if (merged_clip == None):
+                i += 1
+                continue
 
             # generate the new clip name
             new_clip_name = clips_to_merge[0].clip_dir.split('_')[0] + '_' + datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S') + '.mp4'
 
             # write the merged clip to file with the file name of the first clip
-            if (merged_clip == None):
-                break
-
             merged_clip.write_videofile(new_clip_name)
 
             # remove the clips from the list
@@ -77,9 +79,7 @@ class ClipCompiler:
         merge_point_1, merge_point_2, vid_fps_1, vid_fps_2 = self.get_merge_point(clip1, clip2)
 
         if (merge_point_1 == None or merge_point_2 == None):
-            print('Error: merge point not found')
-            print(f'Clip 1: {clip1.clip_dir}, Clip 2: {clip2.clip_dir}')
-            return
+            return None
 
         # using the merge point use moviepy to merge the clips
         clip1 = VideoFileClip(clip1.clip_dir)
@@ -96,7 +96,7 @@ class ClipCompiler:
 
     # given two np arrays of video files find the exact frame where they should be merged and return it
     def get_merge_point(self, clip1, clip2):
-        entry1, fps1, frame_count_1 = self.get_frame(clip1)
+        entry1, fps1, frame_count_1 = self.get_last_frame(clip1)
 
         # merge poing vars
         merge_point_1 = frame_count_1
@@ -114,7 +114,7 @@ class ClipCompiler:
         ret, entry2 = cap.read()
 
         # loop until the same frame is found
-        frame = 1
+        frame = 0
         best_sum = 0
         while (ret and frame < frame_count):
             ret, entry2 = cap.read()
@@ -127,10 +127,15 @@ class ClipCompiler:
 
         cap.release()
 
+        print(f'Best frame for merge had score: {best_sum}')
+        if (best_sum > MAX_DIFFERENCE):
+            print('Error: to many differences in best frame')
+            return None, None, None, None
+
         return merge_point_1, merge_point_2, fps1, fps2
     
-    # given a clip object return a numpy array of the frames
-    def get_frame(self, clip):
+    # given a clip object return a numpy array of the last frame in the clip
+    def get_last_frame(self, clip):
         cap = cv2.VideoCapture(clip.clip_dir)
         frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -139,8 +144,8 @@ class ClipCompiler:
         fps = cap.get(cv2.CAP_PROP_FPS)
 
         buf = np.empty((frame_height, frame_width, 3), np.dtype('uint8'))
-
         fc = 0
+
         for i in range(0, frame_count - 1):
             ret, buf = cap.read()
             fc += 1
@@ -149,21 +154,9 @@ class ClipCompiler:
 
         return buf, fps, frame_count
 
-    # given a list of clips find the ones that overlap
-    # returns a tuple of the two clips that overlap
-    # the first clip in the tuple is the one that comes first chronologically
-    # returns None if no clips overlap
-    def find_overlapping_clip(self, clips):
-        for i, clip in enumerate(clips):
-            for j, clip2 in enumerate(clips):
-                if i != j:
-                    if clip.time < clip2.time:
-                        if clip.time + datetime.timedelta(seconds=clip.duration) > clip2.time:
-                            return (clip, clip2)
-                    else:
-                        if clip2.time + datetime.timedelta(seconds=clip2.duration) > clip.time:
-                            return (clip2, clip)  
-        return None
+    # gives the next two clips that should be checked for a merge
+    def get_clips_to_merge(self, clips, index):
+        return clips[index], clips[index + 1]
     
     def open_csv(self, csv_file_dir):
         clips = []
