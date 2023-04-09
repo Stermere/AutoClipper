@@ -26,6 +26,7 @@ TARGET_VIDEO_LENGTH = config['TARGET_VIDEO_LENGTH']
 LOOK_BACK_TIME = config['LOOK_BACK_TIME']
 REQUIRED_CLIP_NUM = config['REQUIRED_CLIP_NUM']
 TRANSITION_THRESHOLD = config['TRANSITION_THRESHOLD']
+EDGE_TRIM_TIME = config['EDGE_TRIM_TIME']
 
 # these are likly not going to change so they are not in the config file
 EDGE_TRIM_THRESHOLD = 3.0
@@ -65,11 +66,13 @@ class VideoMaker:
             # find the time between this clip and the next clip
             time_between_clips = datetime.timedelta(seconds=TRANSITION_THRESHOLD)
             if (i != len(self.clips) - 1):
-                time_between_clips = self.clips[i + 1].time - self.clips[i].time - datetime.timedelta(seconds=videos[-1].duration)
+                time_between_clips = self.clips[i + 1].time - self.clips[i].time
 
-            # add transitions between clips with a time greater than 
-            if (i != len(self.clips) - 1 or time_between_clips >= datetime.timedelta(seconds=TRANSITION_THRESHOLD)):
-                videos.append(VideoFileClip(self.transition_dir).volumex(TRANSITION_VOLUME).subclip(TRANSITION_SUBCLIP[0], TRANSITION_SUBCLIP[1]))
+            # do not add transitions in these cases
+            if (i == len(self.clips) - 1 or time_between_clips < datetime.timedelta(seconds=TRANSITION_THRESHOLD)):
+                continue
+
+            videos.append(VideoFileClip(self.transition_dir).volumex(TRANSITION_VOLUME).subclip(TRANSITION_SUBCLIP[0], TRANSITION_SUBCLIP[1]))
 
 
         # now lets add the intro and outro clips
@@ -155,13 +158,13 @@ class VideoMaker:
         for i in range(len(text_times)):
             # if a word took unusally long to say we know to filter that section out
             if (text_times[i]["end"] - text_times[i]["start"] < EDGE_TRIM_THRESHOLD):
-                start_time = text_times[i]["start"]
+                start_time = text_times[i]["start"] - EDGE_TRIM_TIME
                 break
         
         for i in range(len(text_times) - 1, 0, -1):
             # if a word took unusally long to say we know to filter that section out
             if (text_times[i]["end"] - text_times[i]["start"] < EDGE_TRIM_THRESHOLD):
-                end_time = text_times[i]["end"]
+                end_time = text_times[i]["end"] + EDGE_TRIM_TIME
                 break
 
         # if the start and end times are to close then we reject the clip
@@ -196,6 +199,10 @@ class VideoMaker:
         # now we need to combine the clips
         final_clip = concatenate_videoclips(clips, method="compose")
 
+        # if the start and end times are to close then we reject the clip
+        if (final_clip.duration < MIN_CLIP_LENGTH):
+            return None
+
         return final_clip
     
     def clamp(self, n, minn, maxn):
@@ -226,12 +233,7 @@ class VideoMaker:
 
         print("Got clips... making video")
 
-        # check for overlaping clips
-        clip_compiler = ClipCompiler()
-        clips = clip_compiler.merge_clips(clips)
         dirs = [clip.clip_dir for clip in clips]
-
-        # TODO cross reference the clipinfo files to see if there are any of our clips in the top num 
 
         # make sure the output dir exists
         if not os.path.exists(output_dir):
@@ -244,9 +246,6 @@ class VideoMaker:
 
         if not status:
             return False
-        
-        # sleep for a bit so we don't have issues deleting the clips
-        await asyncio.sleep(5)
 
         # delete the clips
         for dir_ in dirs:
