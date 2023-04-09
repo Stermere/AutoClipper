@@ -5,6 +5,15 @@ from src.ChatClassifier import main as chat_classifier
 from src.VideoMaker import VideoMaker
 from src.ClipCompiler import ClipCompiler
 import asyncio
+import json
+import os
+import time
+
+with open('config.json') as f:
+    config = json.load(f)
+
+DEFAULT_CLIP_DIR = config['DEFAULT_CLIP_DIR']
+DEFAULT_CLIP_INFO_DIR = config['DEFAULT_CLIP_INFO_DIR']
 
 if __name__ == '__main__':
     if len(sys.argv) < 2 or sys.argv[1] == '-h' or sys.argv[1] == '--help':
@@ -17,14 +26,14 @@ if __name__ == '__main__':
     elif sys.argv[1] == '-v':
         # check for the second arg of the directory of the clips
         if len(sys.argv) < 3:
-            print('Usage: python3 Main.py -v channel_name/clip_dir')
+            print('Usage: python3 Main.py -v clip_info_dir')
             exit(0)
         if sys.argv[2].endswith('.csv'):
             asyncio.run(VideoMaker.make_from_csv(sys.argv[2]))
         else:
             # check for the third arg of the time
             if len(sys.argv) < 4:
-                print('Usage: python3 Main.py -v channel_name/clip_dir time')
+                print('Usage: python3 Main.py -v channel_name time')
                 exit(0)
             
             asyncio.run(VideoMaker.make_from_channel(sys.argv[2], time=float(sys.argv[3])))
@@ -38,8 +47,18 @@ if __name__ == '__main__':
 
 
     elif sys.argv[1] == '-clean':
-        # remove all the clips and csv files in the directorys
-        pass
+        for i in range(5, 0, -1):
+            print('Cleaning up in {} seconds'.format(i))
+            time.sleep(1)
+        clips = os.listdir(DEFAULT_CLIP_DIR)
+
+        for clip in clips:
+            os.remove(os.path.join(DEFAULT_CLIP_DIR, clip))
+        
+        clip_infos = os.listdir(DEFAULT_CLIP_INFO_DIR)
+        
+        for clip_info in clip_infos:
+            os.remove(os.path.join(DEFAULT_CLIP_INFO_DIR, clip_info))
 
     elif sys.argv[1] == '-auto':
         # run the clip compiler and then the video maker on every csv 
