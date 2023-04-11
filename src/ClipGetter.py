@@ -42,16 +42,15 @@ class ClipGetter:
         for clip in clips[:clip_count]:
             clips_temp.append(clip)
         clips = clips_temp
-        
-        # sort the clips by time
-        if (sort_by_time):
-            clips.sort(key=lambda x: x.created_at)
 
         # create a folder for the clips
         if not os.path.exists(clip_dir):
             os.makedirs(clip_dir, exist_ok=True)
 
         print(f'Found {len(clips)} clips for {user.display_name} in the last {time} hours')
+
+        if len(clips) == 0:
+            return []
         
         # download the clips and create a list of clip objects
         clips_temp = []

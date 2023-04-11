@@ -4,13 +4,15 @@ import twitch
 from twitchAPI import Twitch
 from twitchAPI.oauth import UserAuthenticator
 from twitchAPI.types import AuthScope
+import json
 
 class TwitchAuthenticator:
     # load the app credentials from a file named app_credentials.txt
     # first line the app id, second line the app secret
-    with open('app_credentials.txt', 'r') as f:
-        APP_ID = f.readline().strip()
-        APP_SECRET = f.readline().strip()
+    with open('config.json', 'r') as f:
+        config = json.load(f)
+    APP_ID = config['TWITCH_APP_ID']
+    APP_SECRET = config['TWITCH_APP_SECRET']
     USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CLIPS_EDIT]
 
     def __init__(self):

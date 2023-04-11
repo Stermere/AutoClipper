@@ -5,7 +5,7 @@ from simple_youtube_api.Channel import Channel
 from simple_youtube_api.LocalVideo import LocalVideo
 
 class YoutubeUploader:
-    def __init__(self, secretPath="config.json", credentialsPath="credentials.json"):
+    def __init__(self, secretPath="googleConfig.json", credentialsPath="credentials.json"):
         self.channel = Channel()
         self.channel.login(secretPath, credentialsPath)
 
@@ -40,3 +40,7 @@ class YoutubeUploader:
 
         # liking video
         video.like()   
+
+
+if __name__ == "__main__":
+    uploader = YoutubeUploader()

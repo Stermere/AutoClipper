@@ -1,10 +1,7 @@
 # a class that attempts to find the most exiting parts of a twitch stream and clip them
-from twitchAPI import Twitch
 from twitchAPI.types import TwitchResourceNotFound, TwitchBackendException
-from twitchAPI.oauth import UserAuthenticator
 from twitchAPI.types import AuthScope, ChatEvent
 from twitchAPI.chat import Chat, EventData, ChatMessage, ChatSub, ChatCommand
-import twitch
 import asyncio
 import datetime
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
@@ -16,20 +13,13 @@ from src.TwitchAuthenticator import TwitchAuthenticator
 import concurrent.futures
 import os
 
-# load the app credentials from a file named app_credentials.txt
-# first line the app id, second line the app secret
-with open('app_credentials.txt', 'r') as f:
-    APP_ID = f.readline().strip()
-    APP_SECRET = f.readline().strip()
 
 # load the target channels from a file named target_channels.txt
 # each channel should be on a new line
 with open('target_channels.txt', 'r') as f:
     TARGET_CHANNELS = f.readlines()
     TARGET_CHANNELS = [channel.strip() for channel in TARGET_CHANNELS]
-#TARGET_CHANNELS = ['filian']
 
-USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CLIPS_EDIT]
 TIME_WINDOW = 10
 STAT_INTERVAL = 1
 PRINT_CHAT = False

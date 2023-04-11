@@ -27,11 +27,13 @@ LOOK_BACK_TIME = config['LOOK_BACK_TIME']
 REQUIRED_CLIP_NUM = config['REQUIRED_CLIP_NUM']
 TRANSITION_THRESHOLD = config['TRANSITION_THRESHOLD']
 EDGE_TRIM_TIME = config['EDGE_TRIM_TIME']
+VIDEOS_TO_FETCH = config['VIDEOS_TO_FETCH']
 
 # these are likly not going to change so they are not in the config file
-EDGE_TRIM_THRESHOLD = 3.0
-MIDDLE_TRIM_THRESHOLD = 5.0
-MIN_CLIP_LENGTH = 5.0
+EDGE_TRIM_THRESHOLD = 5.0
+MIDDLE_TRIM_THRESHOLD = 4.0
+MIN_CLIP_LENGTH = 3.0
+LENGTH_TO_TRIM = 10.0
 
 
 class VideoMaker:
@@ -48,17 +50,27 @@ class VideoMaker:
     def make_video(self):
         # second thing lets combine all the clips in clip_dirs
         videos = []
+        added_transition = False
+        transcribed_text = None
         for i, clip in enumerate(self.clips):
             if not os.path.exists(clip.clip_dir):
                 print("Clip " + clip.clip_dir + " does not exist")
+                added_transition = False
                 continue
 
             # run the video through the filter to get the subclip we want
-            filter_result = self.filter_clips(clip.clip_dir)
+            filter_result, temp_transcribed_text = self.filter_clips(clip.clip_dir)
+
+            print(transcribed_text + "\n\n")
 
             # if None the clip was completely rejected
             if filter_result == None:
+                added_transition = False
                 continue
+
+            # get the first transcribed text for tag, title, and description generation
+            if transcribed_text != None:
+                transcribed_text = temp_transcribed_text
             
             # add the clip to the list of clips
             videos.append(filter_result)
@@ -69,11 +81,16 @@ class VideoMaker:
                 time_between_clips = self.clips[i + 1].time - self.clips[i].time
 
             # do not add transitions in these cases
-            if (i == len(self.clips) - 1 or time_between_clips < datetime.timedelta(seconds=TRANSITION_THRESHOLD)):
+            if (time_between_clips < datetime.timedelta(seconds=TRANSITION_THRESHOLD)):
+                added_transition = False
                 continue
 
+            added_transition = True
             videos.append(VideoFileClip(self.transition_dir).volumex(TRANSITION_VOLUME).subclip(TRANSITION_SUBCLIP[0], TRANSITION_SUBCLIP[1]))
 
+        # if we added a transition at the end remove it
+        if added_transition:
+            videos.pop()
 
         # now lets add the intro and outro clips
         if (self.intro_clip_dir != None):
@@ -94,14 +111,13 @@ class VideoMaker:
             print("The video is only " + str(final_clip.duration) + " seconds long aborting...")
             return False
 
-        # now that we have all the clips lets add some visual effects
-        # TODO
-
         # get the streamer name from the first clip
         streamer_name = self.clips[0].clip_dir.split('/')[-1].split('_')[0]
 
         # render the video
-        final_clip.write_videofile(self.output_dir + streamer_name + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + '.mp4')
+        final_clip.write_videofile(self.output_dir + streamer_name + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + '.mp4', threads=4)
+
+        # TODO upload the video to youtube
 
         return True
     
@@ -113,6 +129,7 @@ class VideoMaker:
     # filter the clips to not include time periods where the streamer is not talking
     def filter_clips(self, clip_dir):
         text_data = self.audio_to_text.convert_video_to_text(clip_dir)
+
         # convert the json to a dict
         text_data = json.loads(text_data)
 
@@ -125,13 +142,17 @@ class VideoMaker:
 
         print("Clip length before trim: " + str(clip_video.duration))
 
+        if (clip_video.duration < LENGTH_TO_TRIM):
+            print("Clip started short skipping filter...")
+            return clip_video
+
         # trim the clip to remove silence at the beginning and end
         clip_video = self.trim_clip(clip_video, text_times)
 
         # if the clip was rejected then return None
         if clip_video == None:
             print("Clip to short after trimming rejecting...")
-            return None
+            return None, None
         print("Clip length after trim: " + str(clip_video.duration))
 
         # remove extra silence in the middle of the clip
@@ -140,10 +161,10 @@ class VideoMaker:
         # if the clip was rejected then return None
         if clip_video == None:
             print("Clip to short after trimming rejecting...")
-            return None
+            return None, None
         print("Clip length after middle trim: " + str(clip_video.duration))
 
-        return clip_video
+        return clip_video, text
     
     # trims the clip to remove silence at the end and beginning
     def trim_clip(self, clip, text_times):
@@ -168,11 +189,11 @@ class VideoMaker:
                 break
 
         # if the start and end times are to close then we reject the clip
-        if (end_time - start_time < MIN_CLIP_LENGTH):
+        clip = clip.subclip(self.clamp(start_time, 0, clip.duration), self.clamp(end_time, 0, clip.duration))
+        if (clip.duration < MIN_CLIP_LENGTH):
             return None
         
-        
-        return clip.subclip(start_time, end_time)
+        return clip
 
     # trims the clip to remove silence in the middle
     def trim_silence(self, clip, text_times):
@@ -185,7 +206,7 @@ class VideoMaker:
         for i in range(len(text_times)):
             # if a word took unusally long to say we know to filter that section out
             if (text_times[i]["end"] - text_times[i]["start"] > MIDDLE_TRIM_THRESHOLD):
-                clips.append(clip.subclip(last_end_time, text_times[i]["start"] + 0.1))
+                clips.append(clip.subclip(self.clamp(last_end_time, 0, clip.duration), self.clamp(text_times[i]["start"] + 0.1, 0, clip.duration)))
                 last_end_time = self.clamp(text_times[i]["end"], 0, clip.duration)
 
         # append the last clip
@@ -197,7 +218,7 @@ class VideoMaker:
             return None
         
         # now we need to combine the clips
-        final_clip = concatenate_videoclips(clips, method="compose")
+        final_clip = concatenate_videoclips(clips, method="chain")
 
         # if the start and end times are to close then we reject the clip
         if (final_clip.duration < MIN_CLIP_LENGTH):
@@ -211,7 +232,7 @@ class VideoMaker:
     # makes a video from a directory of clips and uses the default transition and content for the channel 
     # specified by channel_name
     @staticmethod
-    async def make_from_channel(channel_name, clip_count=10, output_dir=DEFAULT_OUTPUT_DIR, transition_dir=DEFAULT_TRANSITION_DIR, time=LOOK_BACK_TIME, sort_by_time=SORT_BY_TIME):
+    async def make_from_channel(channel_name, clip_count=VIDEOS_TO_FETCH, output_dir=DEFAULT_OUTPUT_DIR, transition_dir=DEFAULT_TRANSITION_DIR, time=LOOK_BACK_TIME, sort_by_time=SORT_BY_TIME):
         # init the twitch authenticator
         authenticator = TwitchAuthenticator()
 
@@ -231,7 +252,20 @@ class VideoMaker:
 
         clips = clipGetter.get_clips(users[0], authenticator.get_client(), time=time, clip_dir=DEFAULT_CLIP_DIR, clip_count=clip_count, sort_by_time=sort_by_time)
 
+        if len(clips) == 0:
+            print("No clips found")
+            return False
+
         print("Got clips... making video")
+
+        # sort all the clips
+        if (sort_by_time):
+            temp_clip = clips[0]
+            clips.sort(key=lambda x: x.created_at)
+
+            # make sure the most popular clip is first
+            index = clips.index(temp_clip)
+            clips = clips[index:] + clips[:index]
 
         dirs = [clip.clip_dir for clip in clips]
 
