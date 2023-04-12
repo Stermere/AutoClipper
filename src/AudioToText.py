@@ -24,14 +24,14 @@ class AudioToText():
         audio.write_audiofile(TEMP_AUDIO_FILE, codec="pcm_s16le")
 
         # convert the audio to mono
-        sound = AudioSegment.from_file(TEMP_AUDIO_FILE, format="wav")
-        sound = sound.set_channels(1)
+        #sound = AudioSegment.from_file(TEMP_AUDIO_FILE, format="wav")
+        #sound = sound.set_channels(1)
 
         # match the target amplitude
-        sound = self.match_target_amplitude(sound, -20.0)
+        #sound = self.match_target_amplitude(sound, -20.0)
 
         # export the audio file
-        sound.export(TEMP_AUDIO_FILE, format="wav")
+        #sound.export(TEMP_AUDIO_FILE, format="wav")
 
         # reshape the data so that it can be fed into the noise reduction algorithm
         rate, data = wav.read(TEMP_AUDIO_FILE)

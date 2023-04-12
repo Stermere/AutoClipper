@@ -5,8 +5,10 @@ import cv2
 import numpy as np
 from src.Clip import Clip
 import datetime
+import math
 
 MAX_DIFFERENCE = 1000
+MAX_CLIP_LENGTH = 120
 
 class ClipCompiler:
     # given a csv file of clips cluster them into groups where clips overlap and merge them
@@ -33,6 +35,12 @@ class ClipCompiler:
             clips_to_merge = self.get_clips_to_merge(clips, i)
 
             print('Attempting merge...')
+
+            # if the time is more than 120 seconds apart skip
+            if (clips_to_merge[1].time - clips_to_merge[0].time > datetime.timedelta(seconds=MAX_CLIP_LENGTH)):
+                print('Time difference too large, skipping...')
+                i += 1
+                continue
             
             # merge the clips
             merged_clip = self.merge_clip(clips_to_merge[0], clips_to_merge[1])
@@ -95,10 +103,10 @@ class ClipCompiler:
         return merged_clip
 
     # given two np arrays of video files find the exact frame where they should be merged and return it
+    # TODO fix this it's broken
     def get_merge_point(self, clip1, clip2):
         entry1, fps1, frame_count_1 = self.get_last_frame(clip1)
 
-        # merge poing vars
         merge_point_1 = frame_count_1
         merge_point_2 = None
 
@@ -115,19 +123,26 @@ class ClipCompiler:
 
         # loop until the same frame is found
         frame = 0
-        best_sum = 0
-        while (ret and frame < frame_count):
+        best_sum = math.inf
+        while (frame < frame_count):
             ret, entry2 = cap.read()
 
-            sum_ = np.sum(entry2 == entry1)
-            if (sum_ > best_sum):
+            if (entry2 is None or entry1 is None or ret is False):
+                break
+
+            # compute the difference between the two frames
+            sum_ = np.sum(entry1 != entry2)
+
+            if (sum_ < best_sum):
                 merge_point_2 = frame
                 best_sum = sum_
+                print(f'New best frame: {frame} with score: {best_sum}')
             frame += 1
 
         cap.release()
 
         print(f'Best frame for merge had score: {best_sum}')
+
         if (best_sum > MAX_DIFFERENCE):
             print('Error: to many differences in best frame')
             return None, None, None, None
@@ -140,15 +155,15 @@ class ClipCompiler:
         frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
         fps = cap.get(cv2.CAP_PROP_FPS)
 
         buf = np.empty((frame_height, frame_width, 3), np.dtype('uint8'))
-        fc = 0
 
-        for i in range(0, frame_count - 1):
+        for i in range(0, frame_count):
             ret, buf = cap.read()
-            fc += 1
+
+            if (ret == False):
+                break
 
         cap.release()
 
