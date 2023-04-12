@@ -6,6 +6,7 @@ from src.Clip import Clip
 from src.ClipCompiler import ClipCompiler
 from src.TwitchAuthenticator import TwitchAuthenticator
 from src.AudioToText import AudioToText
+from src.OpenAIUtils import OpenAIUtils
 import datetime
 import json
 import asyncio
@@ -31,9 +32,10 @@ VIDEOS_TO_FETCH = config['VIDEOS_TO_FETCH']
 
 # these are likly not going to change so they are not in the config file
 EDGE_TRIM_THRESHOLD = 5.0
-MIDDLE_TRIM_THRESHOLD = 4.0
+MIDDLE_TRIM_THRESHOLD = 5.0
 MIN_CLIP_LENGTH = 3.0
 LENGTH_TO_TRIM = 10.0
+TRANSCRIPTION_LENGTH = 400
 
 
 class VideoMaker:
@@ -45,13 +47,14 @@ class VideoMaker:
         self.transition_dir = transition_dir
 
         self.audio_to_text = AudioToText()
+        self.languageModel = OpenAIUtils()
 
     # makes a video from the clips Returns True if successful
     def make_video(self):
         # second thing lets combine all the clips in clip_dirs
         videos = []
         added_transition = False
-        transcribed_text = None
+        transcribed_text = ""
         for i, clip in enumerate(self.clips):
             if not os.path.exists(clip.clip_dir):
                 print("Clip " + clip.clip_dir + " does not exist")
@@ -61,7 +64,7 @@ class VideoMaker:
             # run the video through the filter to get the subclip we want
             filter_result, temp_transcribed_text = self.filter_clips(clip.clip_dir)
 
-            print(transcribed_text + "\n\n")
+            print(f"{temp_transcribed_text}\n\n")
 
             # if None the clip was completely rejected
             if filter_result == None:
@@ -69,8 +72,8 @@ class VideoMaker:
                 continue
 
             # get the first transcribed text for tag, title, and description generation
-            if transcribed_text != None:
-                transcribed_text = temp_transcribed_text
+            if transcribed_text != None and len(transcribed_text) < TRANSCRIPTION_LENGTH:
+                transcribed_text += f" (Cut to next clip) {temp_transcribed_text}"
             
             # add the clip to the list of clips
             videos.append(filter_result)
@@ -116,6 +119,13 @@ class VideoMaker:
 
         # render the video
         final_clip.write_videofile(self.output_dir + streamer_name + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + '.mp4', threads=4)
+
+        print(transcribed_text)
+
+        # query the language model for the title, description, and tags
+        title, description, tags = self.languageModel.get_video_info(streamer_name, transcribed_text)
+
+        print(f"Title: {title}\nDescription: {description}\nTags: {tags}\n\n")
 
         # TODO upload the video to youtube
 
@@ -261,7 +271,7 @@ class VideoMaker:
         # sort all the clips
         if (sort_by_time):
             temp_clip = clips[0]
-            clips.sort(key=lambda x: x.created_at)
+            clips.sort(key=lambda x: x.time)
 
             # make sure the most popular clip is first
             index = clips.index(temp_clip)
@@ -287,8 +297,9 @@ class VideoMaker:
                 if os.path.exists(dir_):
                     os.remove(dir_)
             except OSError:
-                # if one file is not deleted its not a big deal
-                pass
+                print("Error while deleting file " + dir_)
+
+        return True
 
     # makes a video from a csv file that specifies the clips to use csv_dir can be a csv file or a directory of csv files
     @staticmethod
