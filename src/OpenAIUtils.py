@@ -16,6 +16,19 @@ class OpenAIUtils:
     def __init__(self, api_key=API_KEY):
         openai.api_key = api_key
 
+    # given an audio file path return the transcript of the audio
+    # uses openai's speech to text api
+    def transcribe(self, audio):
+        if type(audio) == str:
+            audio_file = open(audio, 'rb')
+        else:
+            audio_file = audio
+
+        transcript = openai.Audio.transcribe("whisper-1", audio_file)
+
+        return transcript["text"]
+
+    # given a prompt return the response
     def get_response(self, prompt):
         completion = openai.ChatCompletion.create(model=DEFAULT_MODEL, messages=[{"role": "user", "content": prompt}, SYSTEM_MESSAGE], max_tokens=300)
         return completion.choices[0].message.content
@@ -25,8 +38,10 @@ class OpenAIUtils:
         # build the prompt
         prompt = f"The channel is {channel} and the transcript is \"{transcript}\".\
                    Make sure to include a title, description, and tags in the format:\
-                   title: <title> description: <description> (description should promote {channel}) tags: <tags> (tags are seperated by comma). \
-                   Be aware that the transcription may not be accurate and may span multiple clips, so you may click bait as much as needed (try not to be blatant)."
+                   title: <title> description: <description> tags: <tags>. \
+                   The title should end with '| {channel}', description should promote {channel}, tags are seperated by comma \
+                   Be aware that the transcription may not be accurate and will span multiple clips, so DO NOT mention any location or item in the transcription.\
+                   You may click bait as much as needed (try not to be blatant)."
         
         response = self.get_response(prompt)
 
@@ -42,10 +57,14 @@ class OpenAIUtils:
 
 if __name__ == "__main__":
     openai_utils = OpenAIUtils()
-    title, description, tags = openai_utils.get_video_info('sicknastygamer', 'hello my name is sicknastygamer and today we are playing jump king and we are going to beat the game in one try')
 
-    print(f'Title: {title}')
-    print(f'Description: {description}')
-    print(f'Tags: {tags}')
+    # open a video and write it as a wav file
+    from moviepy.editor import *
+    video = VideoFileClip('test.mp4')
+    video.audio.write_audiofile('test.wav')
+
+    text = openai_utils.transcribe('test.wav')
+
+    print(text)
 
         
