@@ -9,7 +9,7 @@ class YoutubeUploader:
         self.channel = Channel()
         self.channel.login(secretPath, credentialsPath)
 
-    def upload(self, channelName, title, description, tags, category, privacyStatus, videoPath, thumbnailPath, publishAt=None):
+    def upload(self, title, description, tags, privacyStatus, videoPath, thumbnailPath, category=None, publishAt=None):
         # setting up the video that is going to be uploaded
         video = LocalVideo(file_path=videoPath)
 
@@ -17,8 +17,10 @@ class YoutubeUploader:
         video.set_title(title)
         video.set_description(description)
         video.set_tags(tags)
-        video.set_category(category)
-        video.set_default_language("en-US")
+
+        if category is not None:
+            video.set_category(category)
+
 
         # set publish time
         if publishAt is not None:
@@ -29,11 +31,15 @@ class YoutubeUploader:
         video.set_license("creativeCommon")
         video.set_privacy_status(privacyStatus)
         video.set_public_stats_viewable(True)
+        video.set_default_language("en-US")
 
         # setting thumbnail
-        video.set_thumbnail_path(thumbnailPath)
+        if thumbnailPath is not None:
+            video.set_thumbnail_path(thumbnailPath)
 
         # uploading video and printing the results
+        input("Press enter to confirm upload (Ctrl+C to cancel) ...")
+
         video = self.channel.upload_video(video)
         print(video.id)
         print(video)

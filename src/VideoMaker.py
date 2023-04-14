@@ -7,6 +7,7 @@ from src.ClipCompiler import ClipCompiler
 from src.TwitchAuthenticator import TwitchAuthenticator
 from src.AudioToText import AudioToText
 from src.OpenAIUtils import OpenAIUtils
+from src.YoutubeUploader import YoutubeUploader
 import datetime
 import json
 import asyncio
@@ -35,7 +36,8 @@ EDGE_TRIM_THRESHOLD = 5.0
 MIDDLE_TRIM_THRESHOLD = 5.0
 MIN_CLIP_LENGTH = 3.0
 LENGTH_TO_TRIM = 10.0
-TRANSCRIPTION_LENGTH = 400
+TRANSCRIPTION_LENGTH = 600
+TEMP_AUDIO_FILE = "temp/audio.wav"
 
 
 class VideoMaker:
@@ -46,35 +48,38 @@ class VideoMaker:
         self.output_dir = output_dir
         self.transition_dir = transition_dir
 
+        # used to get time stamps of words in the audio
         self.audio_to_text = AudioToText()
-        self.languageModel = OpenAIUtils()
+
+        # used to get the title, description, and tags using a LLM and a more advanced transcription
+        self.ml_models = OpenAIUtils()
 
     # makes a video from the clips Returns True if successful
     def make_video(self):
         # second thing lets combine all the clips in clip_dirs
         videos = []
         added_transition = False
-        transcribed_text = ""
+
+        # loop through all the clips and filter them as well as add transitions
         for i, clip in enumerate(self.clips):
+            # check if the clip exists
             if not os.path.exists(clip.clip_dir):
                 print("Clip " + clip.clip_dir + " does not exist")
                 added_transition = False
                 continue
 
-            # run the video through the filter to get the subclip we want
-            filter_result, temp_transcribed_text = self.filter_clips(clip.clip_dir)
+            # get the text and time stamps from the audio (done using vosk because its free)
+            text_data = self.audio_to_text.convert_video_to_text(clip.clip_dir)
+            text_data = json.loads(text_data)
 
-            print(f"{temp_transcribed_text}\n\n")
+            # run the video through the filter to get the subclip we want
+            filter_result = self.filter_clips(clip.clip_dir, text_data)
 
             # if None the clip was completely rejected
             if filter_result == None:
                 added_transition = False
                 continue
 
-            # get the first transcribed text for tag, title, and description generation
-            if transcribed_text != None and len(transcribed_text) < TRANSCRIPTION_LENGTH:
-                transcribed_text += f" (Cut to next clip) {temp_transcribed_text}"
-            
             # add the clip to the list of clips
             videos.append(filter_result)
 
@@ -114,20 +119,28 @@ class VideoMaker:
             print("The video is only " + str(final_clip.duration) + " seconds long aborting...")
             return False
 
-        # get the streamer name from the first clip
+        # get the save name
         streamer_name = self.clips[0].clip_dir.split('/')[-1].split('_')[0]
+        save_name = self.output_dir + streamer_name + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + '.mp4'
 
         # render the video
-        final_clip.write_videofile(self.output_dir + streamer_name + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + '.mp4', threads=4)
+        final_clip.write_videofile(save_name, threads=4)
 
-        print(transcribed_text)
+        # get the text from the video (done using whisper because its way more accurate)
+        video = VideoFileClip(save_name)
+        video = video.subclip(0, self.clamp(60, 0, video.duration))
+        video.audio.write_audiofile(TEMP_AUDIO_FILE)
+        text = self.ml_models.transcribe(TEMP_AUDIO_FILE)
+        os.remove(TEMP_AUDIO_FILE)
 
         # query the language model for the title, description, and tags
-        title, description, tags = self.languageModel.get_video_info(streamer_name, transcribed_text)
+        title, description, tags = self.ml_models.get_video_info(streamer_name, text)
 
-        print(f"Title: {title}\nDescription: {description}\nTags: {tags}\n\n")
+        print(f"\nTitle: {title}\nDescription: {description}\nTags: {tags}\n\n")
 
-        # TODO upload the video to youtube
+        # upload the video to youtube
+        youtube = YoutubeUploader()
+        youtube.upload(title, description, tags, "private", save_name, None)
 
         return True
     
@@ -137,13 +150,7 @@ class VideoMaker:
         return True
     
     # filter the clips to not include time periods where the streamer is not talking
-    def filter_clips(self, clip_dir):
-        text_data = self.audio_to_text.convert_video_to_text(clip_dir)
-
-        # convert the json to a dict
-        text_data = json.loads(text_data)
-
-
+    def filter_clips(self, clip_dir, text_data):
         text_times = text_data["result"]
         text = text_data["text"]
 
@@ -154,7 +161,7 @@ class VideoMaker:
 
         if (clip_video.duration < LENGTH_TO_TRIM):
             print("Clip started short skipping filter...")
-            return clip_video
+            return clip_video, text
 
         # trim the clip to remove silence at the beginning and end
         clip_video = self.trim_clip(clip_video, text_times)
@@ -162,7 +169,7 @@ class VideoMaker:
         # if the clip was rejected then return None
         if clip_video == None:
             print("Clip to short after trimming rejecting...")
-            return None, None
+            return None
         print("Clip length after trim: " + str(clip_video.duration))
 
         # remove extra silence in the middle of the clip
@@ -171,10 +178,10 @@ class VideoMaker:
         # if the clip was rejected then return None
         if clip_video == None:
             print("Clip to short after trimming rejecting...")
-            return None, None
+            return None
         print("Clip length after middle trim: " + str(clip_video.duration))
 
-        return clip_video, text
+        return clip_video
     
     # trims the clip to remove silence at the end and beginning
     def trim_clip(self, clip, text_times):
@@ -270,12 +277,7 @@ class VideoMaker:
 
         # sort all the clips
         if (sort_by_time):
-            temp_clip = clips[0]
-            clips.sort(key=lambda x: x.time)
-
-            # make sure the most popular clip is first
-            index = clips.index(temp_clip)
-            clips = clips[index:] + clips[:index]
+            clips.sort(key=lambda x: x.time, reverse=False)
 
         dirs = [clip.clip_dir for clip in clips]
 
@@ -322,7 +324,7 @@ class VideoMaker:
 
         # sort the clips by time
         if (SORT_BY_TIME):
-            clips.sort(key=lambda x: x.time)
+            clips.sort(key=lambda x: x.time)            
 
         # get the clip dirs
         dirs = [clip.clip_dir for clip in clips]
