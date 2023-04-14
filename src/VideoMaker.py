@@ -10,7 +10,6 @@ from src.OpenAIUtils import OpenAIUtils
 from src.YoutubeUploader import YoutubeUploader
 import datetime
 import json
-import asyncio
 
 with open('config.json') as f:
     config = json.load(f)
@@ -132,6 +131,8 @@ class VideoMaker:
         video.audio.write_audiofile(TEMP_AUDIO_FILE)
         text = self.ml_models.transcribe(TEMP_AUDIO_FILE)
         os.remove(TEMP_AUDIO_FILE)
+
+        print(f"\nTranscription: {text}\n\n")
 
         # query the language model for the title, description, and tags
         title, description, tags = self.ml_models.get_video_info(streamer_name, text)

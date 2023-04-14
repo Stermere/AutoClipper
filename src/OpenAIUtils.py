@@ -58,13 +58,10 @@ class OpenAIUtils:
 if __name__ == "__main__":
     openai_utils = OpenAIUtils()
 
-    # open a video and write it as a wav file
     from moviepy.editor import *
     video = VideoFileClip('test.mp4')
     video.audio.write_audiofile('test.wav')
-
     text = openai_utils.transcribe('test.wav')
-
     print(text)
 
         
