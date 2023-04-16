@@ -16,18 +16,6 @@ class OpenAIUtils:
     def __init__(self, api_key=API_KEY):
         openai.api_key = api_key
 
-    # given an audio file path return the transcript of the audio
-    # uses openai's speech to text api
-    def transcribe(self, audio):
-        if type(audio) == str:
-            audio_file = open(audio, 'rb')
-        else:
-            audio_file = audio
-
-        transcript = openai.Audio.transcribe("whisper-1", audio_file)
-
-        return transcript["text"]
-
     # given a prompt return the response
     def get_response(self, prompt):
         completion = openai.ChatCompletion.create(model=DEFAULT_MODEL, messages=[{"role": "user", "content": prompt}, SYSTEM_MESSAGE], max_tokens=300)
@@ -57,11 +45,5 @@ class OpenAIUtils:
 
 if __name__ == "__main__":
     openai_utils = OpenAIUtils()
-
-    from moviepy.editor import *
-    video = VideoFileClip('test.mp4')
-    video.audio.write_audiofile('test.wav')
-    text = openai_utils.transcribe('test.wav')
-    print(text)
 
         
