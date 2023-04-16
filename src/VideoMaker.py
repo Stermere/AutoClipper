@@ -5,7 +5,7 @@ from src.ClipGetter import ClipGetter
 from src.Clip import Clip
 from src.ClipCompiler import ClipCompiler
 from src.TwitchAuthenticator import TwitchAuthenticator
-from src.AudioToText import AudioToText
+from src.WhisperInterface import WhisperInterface
 from src.OpenAIUtils import OpenAIUtils
 from src.YoutubeUploader import YoutubeUploader
 import datetime
@@ -48,7 +48,7 @@ class VideoMaker:
         self.transition_dir = transition_dir
 
         # used to get time stamps of words in the audio
-        self.audio_to_text = AudioToText()
+        self.audio_to_text = WhisperInterface()
 
         # used to get the title, description, and tags using a LLM and a more advanced transcription
         self.ml_models = OpenAIUtils()
@@ -58,6 +58,7 @@ class VideoMaker:
         # second thing lets combine all the clips in clip_dirs
         videos = []
         added_transition = False
+        transcription = ""
 
         # loop through all the clips and filter them as well as add transitions
         for i, clip in enumerate(self.clips):
@@ -67,9 +68,8 @@ class VideoMaker:
                 added_transition = False
                 continue
 
-            # get the text and time stamps from the audio (done using vosk because its free)
-            text_data = self.audio_to_text.convert_video_to_text(clip.clip_dir)
-            text_data = json.loads(text_data)
+            # get the text and time stamps
+            text_data = self.audio_to_text.transcribe_from_video(clip.clip_dir) 
 
             # run the video through the filter to get the subclip we want
             filter_result = self.filter_clips(clip.clip_dir, text_data)
@@ -78,6 +78,11 @@ class VideoMaker:
             if filter_result == None:
                 added_transition = False
                 continue
+
+            # add the text to the transcriptions
+            for text in text_data:
+                transcription += text["text"] + " "
+            transcription += "\n"
 
             # add the clip to the list of clips
             videos.append(filter_result)
@@ -125,17 +130,10 @@ class VideoMaker:
         # render the video
         final_clip.write_videofile(save_name, threads=4)
 
-        # get the text from the video (done using whisper because its way more accurate)
-        video = VideoFileClip(save_name)
-        video = video.subclip(0, self.clamp(60, 0, video.duration))
-        video.audio.write_audiofile(TEMP_AUDIO_FILE)
-        text = self.ml_models.transcribe(TEMP_AUDIO_FILE)
-        os.remove(TEMP_AUDIO_FILE)
-
-        print(f"\nTranscription: {text}\n\n")
+        print(f"\nTranscription: {transcription}\n\n")
 
         # query the language model for the title, description, and tags
-        title, description, tags = self.ml_models.get_video_info(streamer_name, text)
+        title, description, tags = self.ml_models.get_video_info(streamer_name, transcription)
 
         print(f"\nTitle: {title}\nDescription: {description}\nTags: {tags}\n\n")
 
@@ -152,9 +150,6 @@ class VideoMaker:
     
     # filter the clips to not include time periods where the streamer is not talking
     def filter_clips(self, clip_dir, text_data):
-        text_times = text_data["result"]
-        text = text_data["text"]
-
         # load the clip 
         clip_video = VideoFileClip(clip_dir)
 
@@ -162,10 +157,10 @@ class VideoMaker:
 
         if (clip_video.duration < LENGTH_TO_TRIM):
             print("Clip started short skipping filter...")
-            return clip_video, text
+            return clip_video
 
         # trim the clip to remove silence at the beginning and end
-        clip_video = self.trim_clip(clip_video, text_times)
+        clip_video = self.trim_clip(clip_video, text_data)
 
         # if the clip was rejected then return None
         if clip_video == None:
@@ -174,7 +169,7 @@ class VideoMaker:
         print("Clip length after trim: " + str(clip_video.duration))
 
         # remove extra silence in the middle of the clip
-        clip_video = self.trim_silence(clip_video, text_times)
+        clip_video = self.trim_silence(clip_video, text_data)
 
         # if the clip was rejected then return None
         if clip_video == None:
@@ -225,7 +220,7 @@ class VideoMaker:
             # if a word took unusally long to say we know to filter that section out
             if (text_times[i]["end"] - text_times[i]["start"] > MIDDLE_TRIM_THRESHOLD):
                 clips.append(clip.subclip(self.clamp(last_end_time, 0, clip.duration), self.clamp(text_times[i]["start"] + 0.1, 0, clip.duration)))
-                last_end_time = self.clamp(text_times[i]["end"], 0, clip.duration)
+                last_end_time = self.clamp(text_times[i]["end"] - 0.1, 0, clip.duration)
 
         # append the last clip
         if (clip.duration - last_end_time > MIDDLE_TRIM_THRESHOLD):
