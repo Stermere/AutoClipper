@@ -37,6 +37,7 @@ MIN_CLIP_LENGTH = 3.0
 LENGTH_TO_TRIM = 10.0
 TRANSCRIPTION_LENGTH = 600
 TEMP_AUDIO_FILE = "temp/audio.wav"
+NO_SPEECH_THRESHOLD = 0.25
 
 
 class VideoMaker:
@@ -69,10 +70,10 @@ class VideoMaker:
                 continue
 
             # get the text and time stamps
-            text_data = self.audio_to_text.transcribe_from_video(clip.clip_dir) 
+            text_data, no_speech_probability = self.audio_to_text.transcribe_from_video(clip.clip_dir) 
 
             # run the video through the filter to get the subclip we want
-            filter_result = self.filter_clips(clip.clip_dir, text_data)
+            filter_result = self.filter_clips(clip.clip_dir, text_data, no_speech_probability)
 
             # if None the clip was completely rejected
             if filter_result == None:
@@ -127,10 +128,10 @@ class VideoMaker:
         streamer_name = self.clips[0].clip_dir.split('/')[-1].split('_')[0]
         save_name = self.output_dir + streamer_name + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + '.mp4'
 
+        print(f"\nTranscription: {transcription}\n\n")
+
         # render the video
         final_clip.write_videofile(save_name, threads=4)
-
-        print(f"\nTranscription: {transcription}\n\n")
 
         # query the language model for the title, description, and tags
         title, description, tags = self.ml_models.get_video_info(streamer_name, transcription)
@@ -149,11 +150,16 @@ class VideoMaker:
         return True
     
     # filter the clips to not include time periods where the streamer is not talking
-    def filter_clips(self, clip_dir, text_data):
+    def filter_clips(self, clip_dir, text_data, no_speech_probability):
         # load the clip 
         clip_video = VideoFileClip(clip_dir)
 
         print("Clip length before trim: " + str(clip_video.duration))
+
+        # if the no speech probability is too high then reject the clip
+        if (no_speech_probability > NO_SPEECH_THRESHOLD):
+            print("No speech probability too high rejecting clip...")
+            return None
 
         if (clip_video.duration < LENGTH_TO_TRIM):
             print("Clip started short skipping filter...")
