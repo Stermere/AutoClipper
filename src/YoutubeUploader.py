@@ -32,6 +32,7 @@ class YoutubeUploader:
         video.set_privacy_status(privacyStatus)
         video.set_public_stats_viewable(True)
         video.set_default_language("en-US")
+        video.set_made_for_kids(False)
 
         # setting thumbnail
         if thumbnailPath is not None:
