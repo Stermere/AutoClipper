@@ -128,7 +128,7 @@ class VideoMaker:
         streamer_name = self.clips[0].clip_dir.split('/')[-1].split('_')[0]
         save_name = self.output_dir + streamer_name + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + '.mp4'
 
-        print(f"\nTranscription: {transcription}\n\n")
+        print(f"\nTranscription: {transcription}\n")
 
         # render the video
         final_clip.write_videofile(save_name, threads=4)
@@ -136,7 +136,7 @@ class VideoMaker:
         # query the language model for the title, description, and tags
         title, description, tags = self.ml_models.get_video_info(streamer_name, transcription)
 
-        print(f"\nTitle: {title}\nDescription: {description}\nTags: {tags}\n\n")
+        print(f"Title: {title}\nDescription: {description}\nTags: {tags}\n")
 
         # upload the video to youtube
         youtube = YoutubeUploader()
@@ -275,7 +275,7 @@ class VideoMaker:
             print("No clips found")
             return False
 
-        print("Got clips... making video")
+        print("\nGot clips... making video")
 
         # sort all the clips
         if (sort_by_time):
