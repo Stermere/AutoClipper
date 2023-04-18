@@ -7,7 +7,7 @@ from src.Clip import Clip
 import datetime
 
 SIMILARITY_PERCENTAGE = 0.5
-MAX_CLIP_LENGTH = 120
+MAX_CLIP_LENGTH = 60
 
 class ClipCompiler:
     # given a csv file of clips cluster them into groups where clips overlap and merge them
@@ -35,7 +35,7 @@ class ClipCompiler:
 
             print('Attempting merge...')
 
-            # if the time is more than 120 seconds apart skip
+            # if the time is more than MAX_CLIP_LENGTH seconds apart skip
             if (clips_to_merge[1].time - clips_to_merge[0].time > datetime.timedelta(seconds=MAX_CLIP_LENGTH)):
                 print('Time difference too large, skipping...')
                 i += 1
@@ -64,8 +64,8 @@ class ClipCompiler:
 
 
             # create the new clip object
-            new_clip = Clip(new_clip_name, None, clips_to_merge[1].streamer_id, clips_to_merge[1].streamer_name, 
-                            clips_to_merge[0].time, merged_clip.duration, None
+            new_clip = Clip(new_clip_name, None, clips_to_merge[1].streamer_id, clips_to_merge[1].game_id, clips_to_merge[1].streamer_name, 
+                            clips_to_merge[0].time, merged_clip.duration
                            )
 
             # add the merged clip to the list
