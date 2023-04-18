@@ -30,9 +30,9 @@ class OpenAIUtils:
                 \"Title: your answer here\nDescription: your answer here\nTags: your answer here\" capitalization is important\
                 The title should end with \"| {channel} clips\", the description should promote {channel}\
                 (The twitch streamer That created these clips) and be quite short just a comment on the video and then a promotion for {channel}, tags are seperated by comma and there should be about 20 of them.\
-                Make sure to add '{channel}' in the appropriate places! Also the title should not be generic, for example \"{channel}'s Hilarious Twitch Stream Moments | {channel} clips\" is a bad title.\
+                Make sure to add '{channel}' in the appropriate places! Also the title should not be generic and should be short and sweet\
                 The title should be novel and cleverly clickbaity here are a few examples to reference for the style \
-                '{channel} we saw that...' or 'Wait {channel}... say that again?' or '{channel} gets baited'."
+                '{channel} we saw that...' or 'Wait {channel}... say that again?' or '{channel} gets baited' just follow the format of illuding to something suspect being said."
     
         response = self.get_response(prompt)
 
