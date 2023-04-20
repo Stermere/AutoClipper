@@ -22,18 +22,44 @@ class OpenAIUtils:
         return completion.choices[0].message.content
     
     # given a channel and the transcript of the clip return the video info
-    def get_video_info(self, channel, transcript):
+    def get_video_info(self, channel, transcript, clip_titles=[]):
+        # remove duplicate titles and make it a string
+        clip_titles = list(set(clip_titles))
+        clip_titles = '\n'.join(clip_titles)
+        clip_titles = "Titles:\n" + clip_titles
+
+        # load the streamer info from the config file
+        with open('creator_info.json') as f:
+            streamer_info = json.load(f)["creators"]
+
+        # get the streamer info
+        streamer_info = streamer_info[channel.lower()]
+
+        # TODO add a try catch here
+        name = streamer_info["name"]
+        twitch_link = streamer_info["twitchLink"]
+        description = streamer_info["description"]
+        catagory = streamer_info["catagory"]
+
+        info = f"Name: {name}\nCatagory:{catagory}\nDescription: {description}"
+
         # build the prompt
-        prompt = f"\"{transcript}\"\n\
-                The above is the Transcript of a set of clip from the twitch streamer {channel} Your task is outlined below.\n\
+        prompt = f"\"{transcript}\"\n\"{clip_titles}\"\n\"{info}\"\
+                Above is the transcript and name of each clip from\
+                a set of clips from the twitch streamer\
+                {name}. There is also some info about the streamer. Use this info to complete the task.\n\
                 Make sure to include a title, description, and tags in the format:\
-                \"Title: your answer here\nDescription: your answer here\nTags: your answer here\" capitalization is important\
-                The title should end with \"| {channel} clips\", the description should promote {channel}\
-                (The twitch streamer That created these clips) and be quite short just a comment on the video and then a promotion for {channel}, tags are seperated by comma and there should be about 20 of them.\
-                Make sure to add '{channel}' in the appropriate places! Also the title should not be generic and should be short and sweet\
-                The title should be novel and cleverly clickbaity here are a few examples to reference for the style \
-                '{channel} we saw that...' or 'Wait {channel}... say that again?' or '{channel} gets baited' just follow the format of illuding to something suspect being said."
-    
+                \"Title: your answer here\nDescription: your answer here\nTags: your \
+                answer here\" capitalization is important\
+                The title should end with \"| {name} clips\", the\
+                description should promote {name}\
+                (The twitch streamer That created these clips) and be\
+                quite short just a comment on the video and then a promotion\
+                for {name}, tags are seperated by comma and there should be about 20 of them.\
+                Make sure to add '{name}' in the appropriate places!\
+                Also the title should be similar to the titles of the clips in style, length, and\
+                word choice, you may use the titles of the clips verbatim."
+        
         response = self.get_response(prompt)
 
         print(response + "\n\n")
@@ -45,6 +71,9 @@ class OpenAIUtils:
         title = title.split('Description: ')[0]
         description = description.split('Tags: ')[0]
         tags = tags.split(', ')
+
+        # add a link to the description since the llm is not good at this
+        description = f"Catch {name} live at: {twitch_link}\n" + description
 
         return title, description, tags
 
