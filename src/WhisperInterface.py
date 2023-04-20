@@ -25,7 +25,7 @@ class WhisperInterface:
         # align whisper output
         result_aligned = whisperx.align(result["segments"], model_a, metadata, audio_file, self.device)
 
-        return result_aligned["word_segments"], result["segments"][0]["no_speech_prob"]
+        return result_aligned["word_segments"]
     
     # returns the same as transcription but takes a video file instead of an audio file
     def transcribe_from_video(self, video_file):
