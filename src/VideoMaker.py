@@ -10,6 +10,7 @@ from src.OpenAIUtils import OpenAIUtils
 from src.YoutubeUploader import YoutubeUploader
 import datetime
 import json
+from copy import deepcopy
 
 with open('config.json') as f:
     config = json.load(f)
@@ -31,14 +32,15 @@ REQUIRED_CLIP_NUM = config['REQUIRED_CLIP_NUM'] # the number of clips that are r
 TRANSITION_THRESHOLD = config['TRANSITION_THRESHOLD'] # the threshold time for when to add a transition
 EDGE_TRIM_TIME = config['EDGE_TRIM_TIME'] # the time to add to the start and end udderance of a clip
 VIDEOS_TO_FETCH = config['VIDEOS_TO_FETCH'] # the number of videos to fetch from the api
+FADE_TIME = config['FADE_TIME'] # the time a fade in and out will take
+SHORT_CLIP_IN_FRONT = config['SHORT_CLIP_IN_FRONT'] # the number of the short clips to add to the front of the video
 
 # these are likly not going to change so they are not in the config file
 MIN_CLIP_LENGTH = 3.0
 LENGTH_TO_TRIM = 10.0
 TEMP_AUDIO_FILE = "temp/audio.wav"
-NO_SPEECH_THRESHOLD = 0.8
-TALKING_THRESHOLD = 0.3 # the percentage of the clip that needs to be talking to be considered a talking clip
-
+TALKING_THRESHOLD = 0.2 # the percentage of the clip that needs to be talking to be considered a talking clip
+TRANSCRIPTS_IN_PROMPT = 3 # the number of transcripts to add to the prompt
 
 
 class VideoMaker:
@@ -69,53 +71,43 @@ class VideoMaker:
             # check if the clip exists
             if not os.path.exists(clip.clip_dir):
                 print("Clip " + clip.clip_dir + " does not exist")
-                added_transition = False
                 continue
 
             # get the text and time stamps
-            text_data, no_speech_probability = self.audio_to_text.transcribe_from_video(clip.clip_dir) 
+            text_data = self.audio_to_text.transcribe_from_video(clip.clip_dir) 
 
             # run the video through the filter to get the subclip we want
-            filter_result = self.filter_clips(clip.clip_dir, text_data, no_speech_probability)
+            filter_result = self.filter_clips(clip.clip_dir, text_data)
 
             # if None the clip was completely rejected
             if filter_result == None:
-                added_transition = False
                 continue
 
             # add the text to the transcriptions
-            clip_text = f"Title: '{clip.title}' Transcription: '"
+            clip_text = f"Transcription: '"
             for text in text_data:
                 clip_text += text["text"] + " "
             clip_text += "'\n"
-            transcription += clip_text
+            if (i < TRANSCRIPTS_IN_PROMPT):
+                transcription += clip_text
 
             print(clip_text)
 
             # add the clip to the list of clips
             videos.append(filter_result)
 
+            added_transition = False
+
             # if the resulting video is longer than the max length then stop
             if (sum([video.duration for video in videos]) > MAX_VIDEO_LENGTH):
-                added_transition = False
                 break
-
-            # find the time between this clip and the next clip
-            time_between_clips = datetime.timedelta(seconds=TRANSITION_THRESHOLD)
-            if (i != len(self.clips) - 1):
-                time_between_clips = self.clips[i + 1].time - self.clips[i].time
-
-            # do not add transitions in these cases
-            if (time_between_clips < datetime.timedelta(seconds=TRANSITION_THRESHOLD)):
-                added_transition = False
-                continue
 
             added_transition = True
             videos.append(VideoFileClip(self.transition_dir).volumex(TRANSITION_VOLUME).subclip(TRANSITION_SUBCLIP[0], TRANSITION_SUBCLIP[1]))
 
         # if we added a transition at the end remove it
         if added_transition:
-            videos.pop()
+            videos.remove(videos[-1])
 
         # now lets add the intro and outro clips
         if (self.intro_clip_dir != None):
@@ -135,6 +127,13 @@ class VideoMaker:
         if not self.check_time(final_clip, REQUIRED_VIDEO_LENGTH):
             print("The video is only " + str(final_clip.duration) + " seconds long aborting...")
             return False
+        
+        # add a fade in and out to the video
+        final_clip = final_clip.fx(vfx.fadein, FADE_TIME).fx(vfx.fadeout, FADE_TIME)
+
+        # make the audio also fade in and out
+        final_clip.audio_fadein(FADE_TIME)
+        final_clip.audio_fadeout(FADE_TIME)
 
         # get the save name
         save_name = self.output_dir + streamer_name + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + '.mp4'
@@ -144,11 +143,10 @@ class VideoMaker:
 
         # query the language model for the title, description, and tags (loop until we get a good result)
         while True:
-            title, description, tags = self.ml_models.get_video_info(streamer_name, transcription)
+            title, description, tags = self.ml_models.get_video_info(streamer_name, transcription, clip_titles=[clip.title for clip in self.clips])
             print(f"Title: {title}\nDescription: {description}\nTags: {tags}\n")
 
             ans = input("Is this good? (y/n): ")
-
             if ans.lower() == "y":
                 break
 
@@ -160,6 +158,9 @@ class VideoMaker:
         youtube = YoutubeUploader()
         youtube.upload(title, description, tags, "private", save_name, None)
 
+        # release any resources used by the video
+        final_clip.close()
+
         return True
     
     def check_time(self, clip, target_time):
@@ -168,16 +169,11 @@ class VideoMaker:
         return True
     
     # filter the clips to not include time periods where the streamer is not talking
-    def filter_clips(self, clip_dir, text_data, no_speech_probability):
+    def filter_clips(self, clip_dir, text_data):
         # load the clip 
         clip_video = VideoFileClip(clip_dir)
 
         print("Clip length before trim: " + str(clip_video.duration))
-
-        # if the no speech probability is too high then reject the clip
-        if (no_speech_probability > NO_SPEECH_THRESHOLD):
-            print("No speech probability too high rejecting clip...")
-            return None
 
         # don't trim already short clips
         if (clip_video.duration < LENGTH_TO_TRIM):
@@ -220,10 +216,10 @@ class VideoMaker:
         # start the clip a little before the first word
         start_time = text_times[0]["start"] - EDGE_TRIM_TIME
         
-        for i in range(len(text_times) - 2, 0, -1):
+        for i in range(len(text_times) - 1, 0, -1):
             # find the last word with a period and use that as the end time
-            char = text_times[i]["text"][-1]
-            if char == "." or char == "?" or char == "!":
+            word = text_times[i]["text"]
+            if "." in word or "?" in word or "!" in word:
                 end_time = text_times[i]["end"] + EDGE_TRIM_TIME
                 break
 
@@ -237,7 +233,7 @@ class VideoMaker:
     def write_channel_info(self, channel_name, title, description, tags):
         pass
 
-    # sorts by time and game id
+    # sorts the clips by time and then moves some short ones to the front
     @staticmethod
     def sort_clips(clips, key=lambda x: x.time, reverse=False):
         clips.sort(key=key, reverse=reverse)
@@ -247,9 +243,30 @@ class VideoMaker:
         for i in range(len(clips)):
             for j in range(i + 1, len(clips)):
                 if clips[i].title == clips[j].title:
-                    rejects.append(clips.pop(j))
+                    rejects.append(clips[j])
+                    break
 
-        clips.extend(rejects)
+        for reject in rejects:
+            clips.remove(reject)
+            clips.append(reject)
+
+        # get the shortest three clips move them to the front of the list
+        clips_copy = deepcopy(clips)
+
+        # sort the clips by length
+        clips_copy.sort(key=lambda x: x.duration, reverse=False)
+
+        # get the shortest three clips
+        shortest_clips = clips_copy[:3]
+
+        # add at the front
+        for clip in shortest_clips:
+            # find the clip with the same id and remove it
+            for c in clips:
+                if c.clip_id == clip.clip_id:
+                    clips.pop(clips.index(c))
+                    break
+        clips = shortest_clips + clips
 
         return clips
     
@@ -277,7 +294,7 @@ class VideoMaker:
 
         print("Getting clips for " + users[0].display_name)
 
-        clips = clipGetter.get_clips(users[0], authenticator.get_client(), time=time, clip_dir=DEFAULT_CLIP_DIR, clip_count=clip_count, sort_by_time=sort_by_views)
+        clips = clipGetter.get_clips(users[0], authenticator.get_client(), time=time, clip_dir=DEFAULT_CLIP_DIR, clip_count=clip_count)
 
         if len(clips) == 0:
             print("No clips found")

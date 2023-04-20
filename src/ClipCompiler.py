@@ -6,8 +6,7 @@ import numpy as np
 from src.Clip import Clip
 import datetime
 
-SIMILARITY_PERCENTAGE = 0.5
-MAX_CLIP_LENGTH = 60
+SIMILARITY_PERCENTAGE = 0.8
 
 class ClipCompiler:
     # given a csv file of clips cluster them into groups where clips overlap and merge them
@@ -27,7 +26,7 @@ class ClipCompiler:
         # compare each clip to the next clip and merge them if they overlap
         i = 0
         while i < len(clips) - 1:
-            # sort the clips by time
+            # sort the clips by time TODO sort by vod offset if that is possible
             clips.sort(key=lambda x: x.time)
 
             # get two possible clips to merge
@@ -35,9 +34,10 @@ class ClipCompiler:
 
             print('Attempting merge...')
 
-            # if the time is more than MAX_CLIP_LENGTH seconds apart skip
-            if (clips_to_merge[1].time - clips_to_merge[0].time > datetime.timedelta(seconds=MAX_CLIP_LENGTH)):
-                print('Time difference too large, skipping...')
+            # if video_id is not the same or the vod offset is not close enough, skip
+            if (clips_to_merge[0].video_id != clips_to_merge[1].video_id
+                or clips_to_merge[1].vod_offset - clips_to_merge[0].vod_offset > clips_to_merge[0].duration):
+                print('Clips do not overlap')
                 i += 1
                 continue
             
@@ -65,7 +65,7 @@ class ClipCompiler:
 
             # create the new clip object
             new_clip = Clip(new_clip_name, None, clips_to_merge[1].streamer_id, clips_to_merge[1].game_id, clips_to_merge[1].streamer_name, 
-                            clips_to_merge[0].time, merged_clip.duration
+                            clips_to_merge[0].time, merged_clip.duration, max([c.view_count for c in clips_to_merge]), clips_to_merge[1].title, clips_to_merge[0].vod_offset, clips_to_merge[1].video_id
                            )
 
             # add the merged clip to the list
@@ -120,6 +120,11 @@ class ClipCompiler:
         # read the first frame
         ret, entry2 = cap.read()
 
+        # validate the frame sizes
+        if (entry2.shape != entry1.shape):
+            print('Error: frame sizes do not match, cannot merge clips')
+            return None, None, None, None
+
         # loop until the same frame is found
         frame = 0
         best_score = 0
@@ -150,29 +155,10 @@ class ClipCompiler:
         return merge_point_1, merge_point_2, fps1, fps2
     
     # given a clip object return a numpy array of the last frame in the clip
-    # TODO can this be done without reading the entire clip?
     def get_last_frame(self, clip):
-        cap = cv2.VideoCapture(clip.clip_dir)
-        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fps = cap.get(cv2.CAP_PROP_FPS)
-
-        buf1 = np.empty((frame_height, frame_width, 3), np.dtype('uint8'))
-        buf2 = np.empty((frame_height, frame_width, 3), np.dtype('uint8'))
-
-        for i in range(0, frame_count):
-            ret, buf1 = cap.read()
-
-            if (ret == False):
-                break
-            buftemp = buf2
-            buf2 = buf1
-            buf1 = buftemp
-
-        cap.release()
-
-        return buf2, fps, frame_count
+        # open the video file
+        video = VideoFileClip(clip.clip_dir)
+        return video.get_frame(video.duration), video.fps, video.reader.nframes
 
     # gives the next two clips that should be checked for a merge
     def get_clips_to_merge(self, clips, index):
