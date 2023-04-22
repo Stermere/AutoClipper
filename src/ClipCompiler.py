@@ -121,6 +121,7 @@ class ClipCompiler:
         ret, entry2 = cap.read()
 
         # validate the frame sizes
+
         if (entry2.shape != entry1.shape):
             print('Error: frame sizes do not match, cannot merge clips')
             return None, None, None, None
@@ -156,9 +157,26 @@ class ClipCompiler:
     
     # given a clip object return a numpy array of the last frame in the clip
     def get_last_frame(self, clip):
-        # open the video file
-        video = VideoFileClip(clip.clip_dir)
-        return video.get_frame(video.duration), video.fps, video.reader.nframes
+        # prepare the stream
+        cap = cv2.VideoCapture(clip.clip_dir)
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        frameWidth = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        frameHeight = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        entry = np.empty((frameHeight, frameWidth, 3), np.dtype('uint8'))
+
+        # read the first frame
+        ret, entry = cap.read()
+
+        # loop until the last frame is reached
+        frame = 0
+        while (frame < frame_count - 2):
+            ret, entry = cap.read()
+            frame += 1
+
+        cap.release()
+
+        return entry, fps, frame_count
 
     # gives the next two clips that should be checked for a merge
     def get_clips_to_merge(self, clips, index):
