@@ -27,7 +27,7 @@ class ClipCompiler:
         i = 0
         while i < len(clips) - 1:
             # sort the clips by time TODO sort by vod offset if that is possible
-            clips.sort(key=lambda x: x.time)
+            clips = self.sort_clips_by_vod_offset(clips)
 
             # get two possible clips to merge
             clips_to_merge = self.get_clips_to_merge(clips, i)
@@ -182,6 +182,26 @@ class ClipCompiler:
     def get_clips_to_merge(self, clips, index):
         return clips[index], clips[index + 1]
     
+    # sorts the clips by vod offset and video id
+    def sort_clips_by_vod_offset(self, clips):
+        # group by video id
+        clips_by_video_id = {}
+        for clip in clips:
+            if clip.video_id not in clips_by_video_id:
+                clips_by_video_id[clip.video_id] = []
+            clips_by_video_id[clip.video_id].append(clip)
+
+        # sort each group by vod offset
+        for video_id in clips_by_video_id:
+            clips_by_video_id[video_id].sort(key=lambda x: x.vod_offset)
+
+        # combine the groups
+        sorted_clips = []
+        for video_id in clips_by_video_id:
+            sorted_clips.extend(clips_by_video_id[video_id])
+
+        return sorted_clips
+
     def open_csv(self, csv_file_dir):
         clips = []
         # each line in the csv file is a clip
