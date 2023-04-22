@@ -27,10 +27,10 @@ class ClipGetter:
             with open(clip_name, 'wb') as f:
                 f.write(r.content)
 
-        return f'{clip_dir}/{user.display_name}_{clip.id}.mp4'
+        return clip_name
 
     # get the most popular clips from a stream in the last time hours and downloads them to a subfolder
-    def get_clips(self, user, client, time=24, clip_dir='temp/clips', clip_count=15):
+    def get_clips(self, user, client, time=24, clip_dir=DEFAULT_SAVE_DIR, clip_count=15):
         # get the clips from the last time hours
         start_time = (datetime.datetime.now(timezone.utc) - datetime.timedelta(hours=time)).astimezone().isoformat()
         
