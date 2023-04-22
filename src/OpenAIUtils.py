@@ -52,11 +52,8 @@ class OpenAIUtils:
                 Make sure to include a title, description, and tags in the format:\
                 \"Title: your answer here\nDescription: your answer here\nTags: your \
                 answer here\" capitalization is important\
-                The title should end with \"| {name} clips\", the\
-                description should promote {name}\
-                (The twitch streamer That created these clips) and be\
-                quite short just a comment on the video and then a promotion\
-                for {name}, tags are seperated by comma and there should be about 20 of them.\
+                The title must end with \"| {name} clips\", the description must be\
+                quite short just a quote from the video that is funny out of context.\
                 Make sure to add '{name}' in the appropriate places!\
                 Also the title should be similar to the titles of the clips in style, length, and\
                 word choice, you may use the titles of the clips verbatim."
@@ -74,10 +71,19 @@ class OpenAIUtils:
         tags = tags.split(', ')
 
         # add a link to the description since the llm is not good at this
-        description = f"Catch {name} live at: {twitch_link}\n\
-                        Support {name} here on youtube: {youtube_link}\n" + description
+        description = f"{name}'s Socials\n -- Twitch: {twitch_link}\n -- Youtube: {youtube_link}\n\n" + description
 
         return title, description, tags
+    
+    # takes a list of clip titles and returns the order the LLM thinks they should be in
+    def get_video_order(titles):
+        # TODO
+        pass
+
+    # generate a set of time stamps for each clip in the video
+    def get_time_stamps(self, channel, transcript, clip_titles=[]):
+        # TODO
+        pass
 
 if __name__ == "__main__":
     openai_utils = OpenAIUtils()
