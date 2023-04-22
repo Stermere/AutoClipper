@@ -38,6 +38,7 @@ class OpenAIUtils:
         # TODO add a try catch here
         name = streamer_info["name"]
         twitch_link = streamer_info["twitchLink"]
+        youtube_link = streamer_info["youtubeLink"]
         description = streamer_info["description"]
         catagory = streamer_info["catagory"]
 
@@ -73,7 +74,8 @@ class OpenAIUtils:
         tags = tags.split(', ')
 
         # add a link to the description since the llm is not good at this
-        description = f"Catch {name} live at: {twitch_link}\n" + description
+        description = f"Catch {name} live at: {twitch_link}\n\
+                        Support {name} here on youtube: {youtube_link}\n" + description
 
         return title, description, tags
 
