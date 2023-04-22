@@ -9,6 +9,10 @@ import json
 import os
 import time
 
+# TODO add a mode to run on start up and continuously make videos scheduling them to be posted once every 8 hours
+# TODO remove the old cliping and chat logging code
+# TODO test the clip compiler on synthetic data and real data
+
 with open('config.json') as f:
     config = json.load(f)
 
@@ -70,5 +74,3 @@ if __name__ == '__main__':
         print('Usage: python3 Main.py <task>\n <task> can be one of the following:\n-l: lurk chat\n-v render a video\n-c combine clips\n--h: help menu (this menu)')
         
     quit(1)
-
-
