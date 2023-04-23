@@ -1,6 +1,6 @@
 # a class that attempts to find the most exiting parts of a twitch stream and clip them
 from twitchAPI.types import TwitchResourceNotFound, TwitchBackendException
-from twitchAPI.types import AuthScope, ChatEvent
+from twitchAPI.types import ChatEvent
 from twitchAPI.chat import Chat, EventData, ChatMessage, ChatSub, ChatCommand
 import asyncio
 import datetime
@@ -266,12 +266,6 @@ class ChatClassifier:
         loop = asyncio.get_running_loop()
         with concurrent.futures.ThreadPoolExecutor() as pool:
             await loop.run_in_executor(pool, input, "Press enter to exit\n")
-
-
-#   TODO's  DONE 1. make the video maker class
-#           2. make a config file for all the settings
-#           3. make a class for handling the LLM model
-#           4. make it so that when creating clips from a streamer it also uses our clips from that streamer if possible
 
 # entry point
 def main(args):
