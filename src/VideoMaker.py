@@ -37,10 +37,10 @@ SHORT_CLIP_IN_FRONT = config['SHORT_CLIP_IN_FRONT'] # the number of the short cl
 
 # these are likly not going to change so they are not in the config file
 MIN_CLIP_LENGTH = 3.0
-LENGTH_TO_TRIM = 10.0
+LENGTH_TO_TRIM = 4.0
 TEMP_AUDIO_FILE = "temp/audio.wav"
 TALKING_THRESHOLD = 0.2 # the percentage of the clip that needs to be talking to be considered a talking clip
-TRANSCRIPTS_IN_PROMPT = 3 # the number of transcripts to add to the prompt
+TRANSCRIPTS_IN_PROMPT = 4 # the number of transcripts to add to the prompt
 
 
 class VideoMaker:
@@ -62,19 +62,56 @@ class VideoMaker:
         # second thing lets combine all the clips in clip_dirs
         videos = []
         added_transition = False
-        transcription = ""
-
         streamer_name = self.clips[0].clip_dir.split('/')[-1].split('_')[0]
 
-        # loop through all the clips and filter them as well as add transitions
-        for i, clip in enumerate(self.clips):
+        text_times = []
+        transcriptions = []
+        titles = []
+
+        # populate transcriptions and titles
+        print("Transcribing clips...")
+        for clip in self.clips:
             # check if the clip exists
             if not os.path.exists(clip.clip_dir):
-                print("Clip " + clip.clip_dir + " does not exist")
+                print("Clip " + clip.clip_dir + " does not exist removing...")
+                self.clips.remove(clip)
                 continue
 
             # get the text and time stamps
-            text_data = self.audio_to_text.transcribe_from_video(clip.clip_dir) 
+            text_data = self.audio_to_text.transcribe_from_video(clip.clip_dir)
+
+            if text_data == None:
+                print("Clip " + clip.clip_dir + " has problematic audio removing...")
+                self.clips.remove(clip)
+                continue
+
+            # populate the transcription titles and text data
+            clip_text = ""
+            for text in text_data:
+                clip_text += text["text"] + " "
+            clip_text += "\n"
+
+            transcriptions.append(clip_text)
+            titles.append(clip.title)
+            text_times.append(text_data)
+
+        # now let the LLM choose the order of the clips
+        print("Choosing order of clips...")
+        order = self.ml_models.get_video_order(titles, transcriptions)
+
+        print("Order of clips chosen by LLM: " + str(order) + "\n")
+
+        # reorder the clips and text data
+        temp = list(zip(self.clips, text_times, transcriptions, titles))
+        temp = [temp[i] for i in order]
+        self.clips, text_times, transcriptions, titles = zip(*temp)
+        
+        print("\nTitles: " + str(titles))
+
+        # build the video from the clips
+        for i, clip in enumerate(self.clips):
+            # get the text data
+            text_data = text_times[i]
 
             # run the video through the filter to get the subclip we want
             filter_result = self.filter_clips(clip.clip_dir, text_data)
@@ -82,16 +119,6 @@ class VideoMaker:
             # if None the clip was completely rejected
             if filter_result == None:
                 continue
-
-            # add the text to the transcriptions
-            clip_text = f"Transcription: '"
-            for text in text_data:
-                clip_text += text["text"] + " "
-            clip_text += "'\n"
-            if (i < TRANSCRIPTS_IN_PROMPT):
-                transcription += clip_text
-
-            print(clip_text)
 
             # add the clip to the list of clips
             videos.append(filter_result)
@@ -141,9 +168,12 @@ class VideoMaker:
         # render the video
         final_clip.write_videofile(save_name, threads=4)
 
+        # release any resources used by the video
+        final_clip.close()
+
         # query the language model for the title, description, and tags (loop until we get a good result)
         while True:
-            title, description, tags = self.ml_models.get_video_info(streamer_name, transcription, clip_titles=[clip.title for clip in self.clips])
+            title, description, tags = self.ml_models.get_video_info(streamer_name, "Transcripts: ".join(transcriptions[:TRANSCRIPTS_IN_PROMPT]), clip_titles=[clip.title for clip in self.clips])
             print(f"Title: {title}\nDescription: {description}\nTags: {tags}\n")
 
             ans = input("Is this good? (y/n): ")
@@ -157,9 +187,6 @@ class VideoMaker:
         # upload the video to youtube
         youtube = YoutubeUploader()
         youtube.upload(title, description, tags, "private", save_name, None)
-
-        # release any resources used by the video
-        final_clip.close()
 
         return True
     
@@ -183,6 +210,12 @@ class VideoMaker:
         # trim the clip to remove silence at the beginning and end
         clip_video = self.trim_clip(clip_video, text_data)
 
+        # if the clip was rejected then return None
+        if clip_video == None:
+            print("Clip to short after trimming rejecting...")
+            return None
+        print("Clip length after trim: " + str(clip_video.duration))
+
         # calculate the total time that the streamer is talking
         total_talking_percentage = 0
         for text in text_data:
@@ -195,12 +228,6 @@ class VideoMaker:
         if (total_talking_percentage < TALKING_THRESHOLD):
             print("Streamers talking time too low rejecting clip...")
             return None
-
-        # if the clip was rejected then return None
-        if clip_video == None:
-            print("Clip to short after trimming rejecting...")
-            return None
-        print("Clip length after trim: " + str(clip_video.duration))
 
         return clip_video
     

@@ -34,6 +34,12 @@ class ClipCompiler:
 
             print('Attempting merge...')
 
+            # if there is no vod offset, skip and pray there was no overlap
+            if clips_to_merge[0].vod_offset == None or clips_to_merge[1].vod_offset == None:
+                print('No vod offset')
+                i += 1
+                continue
+
             # if video_id is not the same or the vod offset is not close enough, skip
             if (clips_to_merge[0].video_id != clips_to_merge[1].video_id
                 or clips_to_merge[1].vod_offset - clips_to_merge[0].vod_offset > clips_to_merge[0].duration):
@@ -77,6 +83,12 @@ class ClipCompiler:
             # rewrite the csv file
             if not isinstance(csv_or_cliplist, list):
                 self.write_csv(csv_or_cliplist, clips_to_merge, [new_clip])
+
+            # release any resources moviepy is using
+            merged_clip.close()
+
+
+
 
         return clips
 
@@ -193,6 +205,10 @@ class ClipCompiler:
 
         # sort each group by vod offset
         for video_id in clips_by_video_id:
+            # if any clip has a None vod offset don't sort this group
+            if any(clip.vod_offset is None for clip in clips_by_video_id[video_id]):
+                continue
+
             clips_by_video_id[video_id].sort(key=lambda x: x.vod_offset)
 
         # combine the groups
