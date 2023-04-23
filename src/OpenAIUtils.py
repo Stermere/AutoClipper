@@ -10,7 +10,7 @@ API_KEY = config['OPENAI_API_KEY']
 DEFAULT_MODEL = config['DEFAULT_MODEL']
 
 # define the system message
-SYSTEM_MESSAGE = {"role": "system", "content": "You are a youtube video editor. You must provide the requested info for the video."}
+SYSTEM_MESSAGE = {"role": "system", "content": "You are a youtube video editor assistant. You must do your best to complete the task layed out by your user."}
 
 class OpenAIUtils:
     def __init__(self, api_key=API_KEY):
@@ -53,14 +53,12 @@ class OpenAIUtils:
                 \"Title: your answer here\nDescription: your answer here\nTags: your \
                 answer here\" capitalization is important\
                 The title must end with \"| {name} clips\", the description must be\
-                quite short just a quote from the video that is funny out of context.\
+                quite short just a small description of the video.\
                 Make sure to add '{name}' in the appropriate places!\
                 Also the title should be similar to the titles of the clips in style, length, and\
-                word choice, you may use the titles of the clips verbatim."
+                word choice, you may use the title's of the clips as a reference. do not respond with anything else."
         
         response = self.get_response(prompt)
-
-        print(response + "\n\n")
 
         # parse the response (this needs to be improved to handle the llm deciding to go off the rails)
         title = response.split('Title: ')[-1]
@@ -76,9 +74,29 @@ class OpenAIUtils:
         return title, description, tags
     
     # takes a list of clip titles and returns the order the LLM thinks they should be in
-    def get_video_order(titles):
-        # TODO
-        pass
+    # titles and transcripts must have the same number of items
+    def get_video_order(self, titles, transcripts):
+        # build a list of tuples where each is a title and transcript
+        clips = list(zip(titles, transcripts))
+        
+        # build the prompt
+        titles = [f"Clip {i}: {clip[0]} - {clip[1][:300]}\n" for i, clip in enumerate(clips)]
+        prompt = "Above are the titles and transcripts of the clips.\
+                Please order them from best to worst. Respond with nothing\
+                but a comma separated list of numbers surounded with brackets.\
+                The first clip is the best and the last clip is the worst.\
+                These are clips from a twitch streamer. You should order them to maximixe\
+                viwer retention as they will be edited together in the order you respond with.\
+                Prioritize short clips that are funny or interesting out of context."
+        prompt += "".join(titles) + "\n" + prompt
+
+        response = self.get_response(prompt)
+
+        # parse the response
+        response = response.split('[')[-1].split(']')[0].split(', ')
+        response = [int(i) for i in response]
+
+        return response
 
     # generate a set of time stamps for each clip in the video
     def get_time_stamps(self, channel, transcript, clip_titles=[]):
@@ -87,5 +105,6 @@ class OpenAIUtils:
 
 if __name__ == "__main__":
     openai_utils = OpenAIUtils()
+
 
         

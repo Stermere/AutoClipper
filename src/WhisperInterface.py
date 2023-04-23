@@ -23,7 +23,12 @@ class WhisperInterface:
         model_a, metadata = whisperx.load_align_model(language_code=DEFAULT_LANGUAGE, device=self.device)
 
         # align whisper output
-        result_aligned = whisperx.align(result["segments"], model_a, metadata, audio_file, self.device)
+        try:
+            result_aligned = whisperx.align(result["segments"], model_a, metadata, audio_file, self.device)
+        except ValueError as e:
+            print(e)
+            return None
+
 
         return result_aligned["word_segments"]
     
@@ -36,6 +41,5 @@ class WhisperInterface:
     
 if __name__ == "__main__":
     wi = WhisperInterface()
-    segs, speech_prob = wi.transcription("test.wav")
+    segs = wi.transcription("test.wav")
     print(segs)
-    print(speech_prob)
