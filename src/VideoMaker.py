@@ -32,7 +32,8 @@ REQUIRED_CLIP_NUM = config['REQUIRED_CLIP_NUM'] # the number of clips that are r
 TRANSITION_THRESHOLD = config['TRANSITION_THRESHOLD'] # the threshold time for when to add a transition
 EDGE_TRIM_TIME = config['EDGE_TRIM_TIME'] # the time to add to the start and end udderance of a clip
 VIDEOS_TO_FETCH = config['VIDEOS_TO_FETCH'] # the number of videos to fetch from the api
-FADE_TIME = config['FADE_TIME'] # the time a fade in and out will take
+FADE_TIME = config['FADE_TIME'] # the time a fade in and out and the begining and end of a video will take
+TRANSITION_FADE_TIME = config['TRANSITION_FADE_TIME'] # the time a fade in and out will take for a transition
 SHORT_CLIP_IN_FRONT = config['SHORT_CLIP_IN_FRONT'] # the number of the short clips to add to the front of the video
 
 # these are likly not going to change so they are not in the config file
@@ -101,6 +102,8 @@ class VideoMaker:
 
         print("Order of clips chosen by LLM: " + str(order) + "\n")
 
+        # TODO make the ability to override the LLM order
+
         # reorder the clips and text data
         temp = list(zip(self.clips, text_times, transcriptions, titles))
         temp = [temp[i] for i in order]
@@ -120,8 +123,15 @@ class VideoMaker:
             if filter_result == None:
                 continue
 
+            # add a sound fade in and out to the clip
+            filter_result = filter_result.fx(vfx.fadein, TRANSITION_FADE_TIME)
+            filter_result = filter_result.audio_fadein(TRANSITION_FADE_TIME)
+            filter_result = filter_result.audio_fadeout(TRANSITION_FADE_TIME)
+            
+
             # add the clip to the list of clips
             videos.append(filter_result)
+
 
             added_transition = False
 
@@ -159,8 +169,8 @@ class VideoMaker:
         final_clip = final_clip.fx(vfx.fadein, FADE_TIME).fx(vfx.fadeout, FADE_TIME)
 
         # make the audio also fade in and out
-        final_clip.audio_fadein(FADE_TIME)
-        final_clip.audio_fadeout(FADE_TIME)
+        final_clip = final_clip.audio_fadein(FADE_TIME)
+        final_clip = final_clip.audio_fadeout(FADE_TIME)
 
         # get the save name
         save_name = self.output_dir + streamer_name + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + '.mp4'

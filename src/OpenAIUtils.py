@@ -52,11 +52,10 @@ class OpenAIUtils:
                 Make sure to include a title, description, and tags in the format:\
                 \"Title: your answer here\nDescription: your answer here\nTags: your \
                 answer here\" capitalization is important\
-                The title must end with \"| {name} clips\", the description must be\
-                quite short just a small description of the video.\
+                The description must be quite short just a small description of the video.\
                 Make sure to add '{name}' in the appropriate places!\
-                Also the title should be similar to the titles of the clips in style, length, and\
-                word choice, you may use the title's of the clips as a reference. do not respond with anything else."
+                The title should be very similar to the first clips title.\
+                you may use the title's of the clips as a reference. do not respond with anything else."
         
         response = self.get_response(prompt)
 
@@ -64,9 +63,12 @@ class OpenAIUtils:
         title = response.split('Title: ')[-1]
         description = title.split('Description: ')[-1]
         tags = description.split('Tags: ')[-1].replace('.', '')
-        title = title.split('Description: ')[0]
+        title = title.split('Description: ')[0].replace('\n', '')
         description = description.split('Tags: ')[0]
         tags = tags.split(', ')
+
+        # add the postfix to the title
+        title += f" | {name} clips"
 
         # add a link to the description since the llm is not good at this
         description = f"{name}'s Socials\n -- Twitch: {twitch_link}\n -- Youtube: {youtube_link}\n\n" + description
