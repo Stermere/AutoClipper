@@ -10,7 +10,7 @@ API_KEY = config['OPENAI_API_KEY']
 DEFAULT_MODEL = config['DEFAULT_MODEL']
 
 # define the system message
-SYSTEM_MESSAGE = {"role": "system", "content": "You are a youtube video editor assistant. You must do your best to complete the task layed out by your user."}
+SYSTEM_MESSAGE = {"role": "system", "content": "You are a youtube video editor assistant. You must complete the task layed out by your user."}
 
 class OpenAIUtils:
     def __init__(self, api_key=API_KEY):
@@ -18,7 +18,7 @@ class OpenAIUtils:
 
     # given a prompt return the response
     def get_response(self, prompt):
-        completion = openai.ChatCompletion.create(model=DEFAULT_MODEL, messages=[{"role": "user", "content": prompt}, SYSTEM_MESSAGE], max_tokens=300)
+        completion = openai.ChatCompletion.create(model=DEFAULT_MODEL, messages=[SYSTEM_MESSAGE, {"role": "user", "content": prompt}], max_tokens=300)
         return completion.choices[0].message.content
     
     # given a channel and the transcript of the clip return the video info
@@ -53,9 +53,10 @@ class OpenAIUtils:
                 \"Title: your answer here\nDescription: your answer here\nTags: your \
                 answer here\" capitalization is important\
                 The description must be quite short just a small description of the video.\
+                The tags must be a comma separated listm there should be 20 of them.\
                 Make sure to add '{name}' in the appropriate places!\
-                The title should be very similar to the first clips title.\
-                you may use the title's of the clips as a reference. do not respond with anything else."
+                The title should be very similar to the clip titles provided but not a copy,\
+                also make it relavant to the first clip."
         
         response = self.get_response(prompt)
 
@@ -77,22 +78,29 @@ class OpenAIUtils:
     
     # takes a list of clip titles and returns the order the LLM thinks they should be in
     # titles and transcripts must have the same number of items
-    def get_video_order(self, titles, transcripts):
+    def get_video_order(self, titles, transcripts, durations):
         # build a list of tuples where each is a title and transcript
-        clips = list(zip(titles, transcripts))
+        clips = list(zip(titles, transcripts, durations))
+
+        # TODO limit the number of clips (context length limit)
         
         # build the prompt
-        titles = [f"Clip {i}: {clip[0]} - {clip[1][:300]}\n" for i, clip in enumerate(clips)]
+        titles = [f"Clip {i} - Title: {clip[0]} - Duration: {clip[2]} - Transcript: {clip[1][:200]}\n" for i, clip in enumerate(clips)]
         prompt = "Above are the titles and transcripts of the clips.\
-                Please order them from best to worst. Respond with nothing\
-                but a comma separated list of numbers surounded with brackets.\
-                The first clip is the best and the last clip is the worst.\
-                These are clips from a twitch streamer. You should order them to maximixe\
+                Your task is to order them from best to worst. Respond with a comma separated list of numbers enclosed by brackets.\
+                These are clips from a twitch streamer. You must order them to maximixe\
                 viwer retention as they will be edited together in the order you respond with.\
-                Prioritize short clips that are funny or interesting out of context."
-        prompt += "".join(titles) + "\n" + prompt
+                Prioritize the shorter clips as they are more likely to be watched."
+        
+        prompt += "".join(titles) + prompt
 
         response = self.get_response(prompt)
+
+        print(response)
+
+        if not "[" in response:
+            print("ERROR: LLM did not respond with a list of numbers")
+            return None
 
         # parse the response
         response = response.split('[')[-1].split(']')[0].split(', ')
