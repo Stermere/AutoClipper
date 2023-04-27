@@ -65,9 +65,11 @@ class VideoMaker:
         added_transition = False
         streamer_name = self.clips[0].clip_dir.split('/')[-1].split('_')[0]
 
+        # TODO filter the stream titles out of clip titles and remove those clips
         text_times = []
         transcriptions = []
         titles = []
+        durations = []
 
         # populate transcriptions and titles
         print("Transcribing clips...")
@@ -95,21 +97,14 @@ class VideoMaker:
             transcriptions.append(clip_text)
             titles.append(clip.title)
             text_times.append(text_data)
+            durations.append(clip.duration)
 
         # now let the LLM choose the order of the clips
         print("Choosing order of clips...")
-        order = self.ml_models.get_video_order(titles, transcriptions)
+        order = self.ml_models.get_video_order(titles, transcriptions, durations)
 
-        print("Order of clips chosen by LLM: " + str(order) + "\n")
-
-        # TODO make the ability to override the LLM order
-
-        # reorder the clips and text data
-        temp = list(zip(self.clips, text_times, transcriptions, titles))
-        temp = [temp[i] for i in order]
-        self.clips, text_times, transcriptions, titles = zip(*temp)
-        
-        print("\nTitles: " + str(titles))
+        # ask the user if they want to override the LLM order
+        self.clips, text_times, transcriptions, titles, durations, order = self.modify_clip_order(self.clips, text_times, transcriptions, titles, durations, order)
 
         # build the video from the clips
         for i, clip in enumerate(self.clips):
@@ -125,13 +120,10 @@ class VideoMaker:
 
             # add a sound fade in and out to the clip
             filter_result = filter_result.fx(vfx.fadein, TRANSITION_FADE_TIME)
-            filter_result = filter_result.audio_fadein(TRANSITION_FADE_TIME)
             filter_result = filter_result.audio_fadeout(TRANSITION_FADE_TIME)
-            
 
             # add the clip to the list of clips
             videos.append(filter_result)
-
 
             added_transition = False
 
@@ -158,6 +150,10 @@ class VideoMaker:
             videos[i] = videos[i].resize(OUTPUT_RESOLUTION)
 
         # get the combined video
+        if (len(videos) == 0):
+            print("No clips were added to the video aborting...")
+            return False
+
         final_clip = concatenate_videoclips(videos, method="compose")
     
         # check the length of the video
@@ -168,8 +164,7 @@ class VideoMaker:
         # add a fade in and out to the video
         final_clip = final_clip.fx(vfx.fadein, FADE_TIME).fx(vfx.fadeout, FADE_TIME)
 
-        # make the audio also fade in and out
-        final_clip = final_clip.audio_fadein(FADE_TIME)
+        # make the audio also fade out
         final_clip = final_clip.audio_fadeout(FADE_TIME)
 
         # get the save name
@@ -214,7 +209,7 @@ class VideoMaker:
 
         # don't trim already short clips
         if (clip_video.duration < LENGTH_TO_TRIM):
-            print("Clip started short skipping filter...")
+            print("Clip started short skipping filter...\n")
             return clip_video
 
         # trim the clip to remove silence at the beginning and end
@@ -222,7 +217,7 @@ class VideoMaker:
 
         # if the clip was rejected then return None
         if clip_video == None:
-            print("Clip to short after trimming rejecting...")
+            print("Clip to short after trimming rejecting...\n")
             return None
         print("Clip length after trim: " + str(clip_video.duration))
 
@@ -236,8 +231,10 @@ class VideoMaker:
 
         # if the streamer is not talking enough reject the clip
         if (total_talking_percentage < TALKING_THRESHOLD):
-            print("Streamers talking time too low rejecting clip...")
+            print("Streamers talking time too low rejecting clip...\n")
             return None
+        
+        print("\n")
 
         return clip_video
     
@@ -307,6 +304,43 @@ class VideoMaker:
 
         return clips
     
+    # allows the user to modify the order of the clips in the video
+    def modify_clip_order(self, clips, text_times, transcriptions, titles, durations, order=None):
+        while True:
+            for i, title in enumerate(titles):
+                print(f"Clip {i} {title} Duration: {clips[i].duration}")
+            print("\n")
+
+            # if the LLM failed of the user wants to override the order
+            if order == None:
+                order = input("Please enter the order of the clips:")
+                order = order.split(' ')
+                
+                # check if the user entered a valid order
+                # if not ask them to enter it again
+                try:
+                    order = [int(i) for i in order]
+                    for i in order:
+                        if i < 0 or i >= len(clips):
+                            raise ValueError
+                except ValueError:
+                    print("Invalid format entered please try again")
+                    order = None
+                    continue
+
+            # reorder the clips and text data
+            temp = list(zip(clips, text_times, transcriptions, titles, durations))
+            temp = [temp[i] for i in order]
+            clips, text_times, transcriptions, titles, durations = zip(*temp)
+
+            user_override = input("Would you like to modify the order (y/n):")
+            if user_override == 'y':
+                order = None
+            elif user_override == 'n':
+                break
+
+        return clips, text_times, transcriptions, titles, durations
+    
     def clamp(self, n, minn, maxn):
         return max(min(maxn, n), minn)
                 
@@ -337,7 +371,7 @@ class VideoMaker:
             print("No clips found")
             return False
 
-        print("\nGot clips... making video")
+        print("\nGot clips... making video\n")
 
         # sort all the clips
         if sort_by_views:
