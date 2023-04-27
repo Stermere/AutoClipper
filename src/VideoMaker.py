@@ -8,6 +8,7 @@ from src.TwitchAuthenticator import TwitchAuthenticator
 from src.WhisperInterface import WhisperInterface
 from src.OpenAIUtils import OpenAIUtils
 from src.YoutubeUploader import YoutubeUploader
+from src.cutFinder import find_cut_point
 import datetime
 import json
 from copy import deepcopy
@@ -38,7 +39,7 @@ SHORT_CLIP_IN_FRONT = config['SHORT_CLIP_IN_FRONT'] # the number of the short cl
 
 # these are likly not going to change so they are not in the config file
 MIN_CLIP_LENGTH = 3.0
-LENGTH_TO_TRIM = 4.0
+LENGTH_TO_TRIM = 15.0
 TEMP_AUDIO_FILE = "temp/audio.wav"
 TALKING_THRESHOLD = 0.2 # the percentage of the clip that needs to be talking to be considered a talking clip
 TRANSCRIPTS_IN_PROMPT = 4 # the number of transcripts to add to the prompt
@@ -67,6 +68,7 @@ class VideoMaker:
 
         # TODO filter the stream titles out of clip titles and remove those clips
         text_times = []
+        audio_loc = []
         transcriptions = []
         titles = []
         durations = []
@@ -213,49 +215,36 @@ class VideoMaker:
             return clip_video
 
         # trim the clip to remove silence at the beginning and end
-        clip_video = self.trim_clip(clip_video, text_data)
+        clip_video = self.trim_clip(clip_video, text_data, clip_dir)
 
         # if the clip was rejected then return None
         if clip_video == None:
             print("Clip to short after trimming rejecting...\n")
             return None
-        print("Clip length after trim: " + str(clip_video.duration))
-
-        # calculate the total time that the streamer is talking
-        total_talking_percentage = 0
-        for text in text_data:
-            total_talking_percentage += text["end"] - text["start"]
-        total_talking_percentage = total_talking_percentage / clip_video.duration
-
-        print("Total talking percentage: " + str(total_talking_percentage))
-
-        # if the streamer is not talking enough reject the clip
-        if (total_talking_percentage < TALKING_THRESHOLD):
-            print("Streamers talking time too low rejecting clip...\n")
-            return None
-        
-        print("\n")
+        print("Clip length after trim: " + str(clip_video.duration) + "\n")
 
         return clip_video
     
     # trims the clip to remove silence at the beginning and to cut of at the end of a sentence
-    def trim_clip(self, clip, text_times):
+    def trim_clip(self, clip, text_times, clip_dir):
         if clip == None:
             return None
-
-        # the variable to store the desired start and end times
-        start_time = 0
-        end_time = clip.duration
         
         # start the clip a little before the first word
         start_time = text_times[0]["start"] - EDGE_TRIM_TIME
+        end_time = text_times[-1]["end"] + EDGE_TRIM_TIME
         
-        for i in range(len(text_times) - 1, 0, -1):
+        # only search the last 1/3 of the clip for the end time (sometimes the transcript forgets to add a period at the end)
+        for i in range(len(text_times) - 1, int(len(text_times) / 2), -1):
+            # TODO make this more robustn
             # find the last word with a period and use that as the end time
             word = text_times[i]["text"]
             if "." in word or "?" in word or "!" in word:
                 end_time = text_times[i]["end"] + EDGE_TRIM_TIME
                 break
+
+        # find a better cut point
+        end_time = find_cut_point(clip_dir, end_time)
 
         # if the start and end times are to close then we reject the clip
         clip = clip.subclip(self.clamp(start_time, 0, clip.duration), self.clamp(end_time, 0, clip.duration))
@@ -307,6 +296,12 @@ class VideoMaker:
     # allows the user to modify the order of the clips in the video
     def modify_clip_order(self, clips, text_times, transcriptions, titles, durations, order=None):
         while True:
+            # reorder the clips and text data
+            if order != None:
+                temp = list(zip(clips, text_times, transcriptions, titles, durations))
+                temp = [temp[i] for i in order]
+                clips, text_times, transcriptions, titles, durations = zip(*temp)
+
             for i, title in enumerate(titles):
                 print(f"Clip {i} {title} Duration: {clips[i].duration}")
             print("\n")
@@ -326,12 +321,7 @@ class VideoMaker:
                 except ValueError:
                     print("Invalid format entered please try again")
                     order = None
-                    continue
-
-            # reorder the clips and text data
-            temp = list(zip(clips, text_times, transcriptions, titles, durations))
-            temp = [temp[i] for i in order]
-            clips, text_times, transcriptions, titles, durations = zip(*temp)
+                continue
 
             user_override = input("Would you like to modify the order (y/n):")
             if user_override == 'y':
@@ -339,7 +329,7 @@ class VideoMaker:
             elif user_override == 'n':
                 break
 
-        return clips, text_times, transcriptions, titles, durations
+        return clips, text_times, transcriptions, titles, durations, order
     
     def clamp(self, n, minn, maxn):
         return max(min(maxn, n), minn)
