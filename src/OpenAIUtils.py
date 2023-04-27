@@ -103,7 +103,7 @@ class OpenAIUtils:
             return None
 
         # parse the response
-        response = response.split('[')[-1].split(']')[0].split(', ')
+        response = response.split('[')[-1].split(']')[0].split(',')
         response = [int(i) for i in response]
 
         return response
