@@ -72,7 +72,8 @@ class OpenAIUtils:
         title += f" | {name} clips"
 
         # add a link to the description since the llm is not good at this
-        description = f"{name}'s Socials\n -- Twitch: {twitch_link}\n -- Youtube: {youtube_link}\n\n" + description
+        promo = f"If you enjoyed this video please consider checking out {name}'s channels!\n\n"
+        description = f"{name}'s Socials\n -- Twitch: {twitch_link}\n -- Youtube: {youtube_link}\n" + promo + description
 
         return title, description, tags
     
@@ -87,7 +88,7 @@ class OpenAIUtils:
         # build the prompt
         titles = [f"Clip {i} - Title: {clip[0]} - Duration: {clip[2]} - Transcript: {clip[1][:200]}\n" for i, clip in enumerate(clips)]
         prompt = "Above are the titles and transcripts of the clips.\
-                Your task is to order them from best to worst. Respond with a comma separated list of numbers enclosed by brackets.\
+                Your task is to order them from best to worst. Respond with a comma separated list of numbers enclosed by brackets like this [1, 2, 3].\
                 These are clips from a twitch streamer. You must order them to maximixe\
                 viwer retention as they will be edited together in the order you respond with.\
                 Prioritize the shorter clips as they are more likely to be watched."
