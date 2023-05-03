@@ -32,6 +32,7 @@ LOOK_BACK_TIME = config['LOOK_BACK_TIME'] # the default time to fetch clips from
 REQUIRED_CLIP_NUM = config['REQUIRED_CLIP_NUM'] # the number of clips that are required to make a video
 TRANSITION_THRESHOLD = config['TRANSITION_THRESHOLD'] # the threshold time for when to add a transition
 EDGE_TRIM_TIME = config['EDGE_TRIM_TIME'] # the time to add to the start and end udderance of a clip
+START_TRIM_TIME = config['START_TRIM_TIME'] # the time to add to the start of the first word in a clip
 VIDEOS_TO_FETCH = config['VIDEOS_TO_FETCH'] # the number of videos to fetch from the api
 FADE_TIME = config['FADE_TIME'] # the time a fade in and out and the begining and end of a video will take
 TRANSITION_FADE_TIME = config['TRANSITION_FADE_TIME'] # the time a fade in and out will take for a transition
@@ -72,6 +73,18 @@ class VideoMaker:
         transcriptions = []
         titles = []
         durations = []
+        used_clips = []
+
+        # open the temp clips file in the file manager
+        os.startfile(os.path.abspath(DEFAULT_CLIP_DIR))
+        input("Delete any clips you dont want in the video then press enter to continue...")
+
+        # repolulate the clip info
+        for clip in self.clips:
+            if not os.path.exists(clip.clip_dir):
+                print("Clip " + clip.clip_dir + " removed...")
+                self.clips.remove(clip)
+                continue
 
         # populate transcriptions and titles
         print("Transcribing clips...")
@@ -126,6 +139,7 @@ class VideoMaker:
 
             # add the clip to the list of clips
             videos.append(filter_result)
+            used_clips.append(clip)
 
             added_transition = False
 
@@ -133,12 +147,22 @@ class VideoMaker:
             if (sum([video.duration for video in videos]) > MAX_VIDEO_LENGTH):
                 break
 
+            # if the two clips are close together do not add a transition
+            if (i != len(self.clips) - 1 and clip.video_id == self.clips[i + 1].video_id):
+                if (self.clips[i + 1].vod_offset == None or clip.vod_offset == None):
+                    pass
+                elif (self.clips[i + 1].vod_offset - clip.vod_offset < TRANSITION_THRESHOLD):
+                    continue
+            
             added_transition = True
             videos.append(VideoFileClip(self.transition_dir).volumex(TRANSITION_VOLUME).subclip(TRANSITION_SUBCLIP[0], TRANSITION_SUBCLIP[1]))
 
         # if we added a transition at the end remove it
         if added_transition:
             videos.remove(videos[-1])
+
+        # remove any clips that are not in the video
+        self.clips = used_clips
 
         # now lets add the intro and outro clips
         if (self.intro_clip_dir != None):
@@ -187,6 +211,12 @@ class VideoMaker:
             if ans.lower() == "y":
                 break
 
+        # add some extra info to the description
+        # if the clips are provided add the time stamps to the description
+        description += "\nTime stamps (UTC+0 time):\n"
+        for i, clip in enumerate(self.clips):
+            description += f"\t{i + 1}. {clip.time}\n"
+
         # TODO save info to a file so we can use it later if we want to
         # ie if we want to make a video with the same title just increment the number at the end
         # or if we want to make sure we don't make a video to soon after another one
@@ -231,7 +261,7 @@ class VideoMaker:
             return None
         
         # start the clip a little before the first word
-        start_time = text_times[0]["start"] - EDGE_TRIM_TIME
+        start_time = text_times[0]["start"] - START_TRIM_TIME
         end_time = text_times[-1]["end"] + EDGE_TRIM_TIME
         
         # only search the last 1/3 of the clip for the end time (sometimes the transcript forgets to add a period at the end)
@@ -381,8 +411,8 @@ class VideoMaker:
         if not status:
             return False
 
-        # delete the clips
-        for dir_ in dirs:
+        # delete all clips in the clip dir
+        for dir_ in os.listdir(DEFAULT_CLIP_DIR):
             try:
                 if os.path.exists(dir_):
                     os.remove(dir_)
