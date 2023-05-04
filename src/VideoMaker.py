@@ -40,7 +40,8 @@ SHORT_CLIP_IN_FRONT = config['SHORT_CLIP_IN_FRONT'] # the number of the short cl
 
 # these are likly not going to change so they are not in the config file
 MIN_CLIP_LENGTH = 3.0
-LENGTH_TO_TRIM = 15.0
+LENGTH_TO_TRIM_BACK =15.0
+LENGTH_TO_TRIM_FULL = 35.0
 TEMP_AUDIO_FILE = "temp/audio.wav"
 TALKING_THRESHOLD = 0.2 # the percentage of the clip that needs to be talking to be considered a talking clip
 TRANSCRIPTS_IN_PROMPT = 4 # the number of transcripts to add to the prompt
@@ -60,6 +61,9 @@ class VideoMaker:
         # used to get the title, description, and tags using a LLM and a more advanced transcription
         self.ml_models = OpenAIUtils()
 
+        # creator specific settings
+        self.cut_adjustment = 0.0 # the amount of time to add to the cut point
+
     # makes a video from the clips Returns True if successful
     def make_video(self):
         # second thing lets combine all the clips in clip_dirs
@@ -67,9 +71,12 @@ class VideoMaker:
         added_transition = False
         streamer_name = self.clips[0].clip_dir.split('/')[-1].split('_')[0]
 
-        # TODO filter the stream titles out of clip titles and remove those clips
+        # certain creators specifically the ai streamers should not cut at the moment of silence
+        if streamer_name.lower() in config["NO_CUT_STREAMERS"]:
+            self.cut_adjustment = 5.0
+            print("cut adjustment active for: " + streamer_name)
+
         text_times = []
-        audio_loc = []
         transcriptions = []
         titles = []
         durations = []
@@ -240,7 +247,7 @@ class VideoMaker:
         print("Clip length before trim: " + str(clip_video.duration))
 
         # don't trim already short clips
-        if (clip_video.duration < LENGTH_TO_TRIM):
+        if (clip_video.duration < LENGTH_TO_TRIM_BACK):
             print("Clip started short skipping filter...\n")
             return clip_video
 
@@ -251,7 +258,6 @@ class VideoMaker:
         if clip_video == None:
             print("Clip to short after trimming rejecting...\n")
             return None
-        print("Clip length after trim: " + str(clip_video.duration) + "\n")
 
         return clip_video
     
@@ -260,9 +266,14 @@ class VideoMaker:
         if clip == None:
             return None
         
+        # print the text times
+        print("Text times:")
+        for text_time in text_times:
+            print(f"\t{text_time['text']}: {text_time['start']} - {text_time['end']}")
+        
         # start the clip a little before the first word
         start_time = text_times[0]["start"] - START_TRIM_TIME
-        end_time = text_times[-1]["end"] + EDGE_TRIM_TIME
+        end_time = clip.duration
         
         # only search the last 1/3 of the clip for the end time (sometimes the transcript forgets to add a period at the end)
         for i in range(len(text_times) - 1, int(len(text_times) / 2), -1):
@@ -272,9 +283,19 @@ class VideoMaker:
             if "." in word or "?" in word or "!" in word:
                 end_time = text_times[i]["end"] + EDGE_TRIM_TIME
                 break
+        
+        # add the cut_adjustment to the end time
+        end_time += self.cut_adjustment
 
         # find a better cut point
         end_time = find_cut_point(clip_dir, end_time)
+
+        # if the start and end times are to close together default to the start time being 0
+        if (clip.duration < LENGTH_TO_TRIM_FULL or end_time - start_time < MIN_CLIP_LENGTH):
+            start_time = 0
+
+        # print the duration of the clip
+        print("Clip duration: " + str(end_time - start_time))
 
         # if the start and end times are to close then we reject the clip
         clip = clip.subclip(self.clamp(start_time, 0, clip.duration), self.clamp(end_time, 0, clip.duration))

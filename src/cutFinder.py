@@ -1,6 +1,5 @@
 import soundfile as sf
 from moviepy.editor import VideoFileClip
-import numpy as np
 
 TEMP_AUDIO_FILE = "temp/audio.wav"
 
@@ -16,6 +15,10 @@ def find_cut_point(video_file, current_cut):
     audio.write_audiofile(TEMP_AUDIO_FILE)
 
     data = get_loudness(TEMP_AUDIO_FILE)[0]
+
+    # if the current cut is at the end of the video look for a cut point one second before
+    if current_cut > duration - 1:
+        current_cut = duration - 1
 
 
     # slide a window of 1 second across the data and find a quiet spot
