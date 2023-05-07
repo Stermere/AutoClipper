@@ -67,6 +67,11 @@ class TwitchAuthenticator:
         # get the streams for the user
         streams = self.client.get_streams(user_ids=user_ids)
         return streams
+    
+    def get_videos_from_ids(self, video_ids):
+        # get the stream title from the video id
+        videos = self.client.get_videos(video_ids=video_ids)
+        return videos
 
     def get_token(self):
         return self.token
