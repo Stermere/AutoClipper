@@ -6,7 +6,7 @@ import numpy as np
 from src.Clip import Clip
 import datetime
 
-SIMILARITY_PERCENTAGE = 0.8
+SIMILARITY_PERCENTAGE = 0.7
 
 class ClipCompiler:
     # given a csv file of clips cluster them into groups where clips overlap and merge them
@@ -50,8 +50,18 @@ class ClipCompiler:
             # merge the clips
             merged_clip = self.merge_clip(clips_to_merge[0], clips_to_merge[1])
 
+            # if there is overlap but we could not merge delete the shorter clips or the first clip if they are the same length
             if (merged_clip == None):
-                i += 1
+                print('Could not merge clips deleting shorter clip')
+                if clips_to_merge[0].duration > clips_to_merge[1].duration:
+                    clips.remove(clips_to_merge[1])
+                    os.remove(clips_to_merge[1].clip_dir)
+                elif clips_to_merge[0].duration < clips_to_merge[1].duration:
+                    clips.remove(clips_to_merge[0])
+                    os.remove(clips_to_merge[0].clip_dir)
+                else:
+                    clips.remove(clips_to_merge[0])
+                    os.remove(clips_to_merge[0].clip_dir)
                 continue
 
             # generate the new clip name
@@ -133,7 +143,6 @@ class ClipCompiler:
         ret, entry2 = cap.read()
 
         # validate the frame sizes
-
         if (entry2.shape != entry1.shape):
             print('Error: frame sizes do not match, cannot merge clips')
             return None, None, None, None
@@ -176,14 +185,19 @@ class ClipCompiler:
         frameHeight = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = cap.get(cv2.CAP_PROP_FPS)
         entry = np.empty((frameHeight, frameWidth, 3), np.dtype('uint8'))
+        entry_buf  = np.empty((frameHeight, frameWidth, 3), np.dtype('uint8'))   
 
         # read the first frame
         ret, entry = cap.read()
 
+
         # loop until the last frame is reached
         frame = 0
         while (frame < frame_count - 2):
-            ret, entry = cap.read()
+            ret, entry_buf = cap.read()
+            if (ret is False):
+                break
+            entry = entry_buf
             frame += 1
 
         cap.release()
