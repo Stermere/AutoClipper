@@ -19,7 +19,7 @@ class ClipGetter:
         # download the clip
         index = clip['thumbnail_url'].find('-preview')
         clip_url = clip['thumbnail_url'][:index] + '.mp4'
-        clip_name = f'{clip_dir}/{user.display_name}_{clip.id}.mp4'
+        clip_name = f'{clip_dir}/{clip.vod_offset}_{clip.video_id}.mp4'
         r = requests.get(clip_url)
         if r.headers['Content-Type'] == 'binary/octet-stream':
             if not os.path.exists(clip_dir):
@@ -58,7 +58,6 @@ class ClipGetter:
             dir_ = self.download_clip(clip, user, clip_dir)
             clips_temp.append(Clip.from_twitch_api_clip(clip, dir_))
         clips = clips_temp
-
 
         # combine any overlapping clips
         clip_compiler = ClipCompiler()
