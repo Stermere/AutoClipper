@@ -48,12 +48,13 @@ TRANSCRIPTS_IN_PROMPT = 4 # the number of transcripts to add to the prompt
 
 
 class VideoMaker:
-    def __init__(self, clips, output_dir, intro_clip_dir=None, outro_clip_dir=None, transition_dir=None):
+    def __init__(self, clips, output_dir, intro_clip_dir=None, outro_clip_dir=None, transition_dir=None, authenticator=None):
         self.intro_clip_dir = intro_clip_dir
         self.outro_clip_dir = outro_clip_dir
         self.clips = clips
         self.output_dir = output_dir
         self.transition_dir = transition_dir
+        self.authenticator = authenticator
 
         # used to get time stamps of words in the audio
         self.audio_to_text = WhisperInterface()
@@ -87,21 +88,17 @@ class VideoMaker:
         input("Delete any clips you dont want in the video then press enter to continue...")
 
         # repolulate the clip info
-        for clip in self.clips:
+        new_clips = []
+        for i, clip in enumerate(self.clips):
             if not os.path.exists(clip.clip_dir):
                 print("Clip " + clip.clip_dir + " removed...")
-                self.clips.remove(clip)
-                continue
+            else:
+                new_clips.append(clip)
+        self.clips = new_clips
 
         # populate transcriptions and titles
         print("Transcribing clips...")
         for clip in self.clips:
-            # check if the clip exists
-            if not os.path.exists(clip.clip_dir):
-                print("Clip " + clip.clip_dir + " does not exist removing...")
-                self.clips.remove(clip)
-                continue
-
             # get the text and time stamps
             text_data = self.audio_to_text.transcribe_from_video(clip.clip_dir)
 
@@ -158,7 +155,7 @@ class VideoMaker:
             if (i != len(self.clips) - 1 and clip.video_id == self.clips[i + 1].video_id):
                 if (self.clips[i + 1].vod_offset == None or clip.vod_offset == None):
                     pass
-                elif (self.clips[i + 1].vod_offset - clip.vod_offset < TRANSITION_THRESHOLD):
+                elif (self.clips[i + 1].vod_offset - clip.vod_offset < TRANSITION_THRESHOLD and self.clips[i + 1].vod_offset - clip.vod_offset > 0.0):
                     continue
             
             added_transition = True
@@ -209,20 +206,35 @@ class VideoMaker:
         # release any resources used by the video
         final_clip.close()
 
+        # get the vod link time stamps
+        vod_links = ""
+        if self.authenticator != None:
+            vod_links += "\nLinks to Vod:\n"
+            for i, clip in enumerate(self.clips):
+                if clip.vod_offset == None:
+                    continue
+                video = self.authenticator.get_videos_from_ids([clip.video_id])
+
+                if len(video) == 0:
+                    continue
+                video = video[0]
+
+                # convert the vod offset to a minutes:seconds format
+                minutes = clip.vod_offset // 60
+                seconds = clip.vod_offset % 60
+                vod_offset = f"{minutes}m{seconds}s"
+
+                vod_links += f"{i + 1}: {video.url}?t={vod_offset}\n"
+
         # query the language model for the title, description, and tags (loop until we get a good result)
         while True:
             title, description, tags = self.ml_models.get_video_info(streamer_name, "Transcripts: ".join(transcriptions[:TRANSCRIPTS_IN_PROMPT]), clip_titles=[clip.title for clip in self.clips])
+            description += vod_links
             print(f"Title: {title}\nDescription: {description}\nTags: {tags}\n")
 
             ans = input("Is this good? (y/n): ")
             if ans.lower() == "y":
                 break
-
-        # add some extra info to the description
-        # if the clips are provided add the time stamps to the description
-        description += "\nTime stamps (UTC+0 time):\n"
-        for i, clip in enumerate(self.clips):
-            description += f"\t{i + 1}. {clip.time}\n"
 
         # TODO save info to a file so we can use it later if we want to
         # ie if we want to make a video with the same title just increment the number at the end
@@ -295,7 +307,7 @@ class VideoMaker:
             start_time = 0
 
         # print the duration of the clip
-        print("Clip duration: " + str(end_time - start_time))
+        print("Clip duration after trim: " + str(end_time - start_time))
 
         # if the start and end times are to close then we reject the clip
         clip = clip.subclip(self.clamp(start_time, 0, clip.duration), self.clamp(end_time, 0, clip.duration))
@@ -418,14 +430,12 @@ class VideoMaker:
         if sort_by_views:
             clips = VideoMaker.sort_clips(clips)
 
-        dirs = [clip.clip_dir for clip in clips]
-
         # make sure the output dir exists
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
         # now lets make the video
-        video_maker = VideoMaker(clips, output_dir, transition_dir=transition_dir)
+        video_maker = VideoMaker(clips, output_dir, transition_dir=transition_dir, authenticator=authenticator)
 
         status = video_maker.make_video()
 
