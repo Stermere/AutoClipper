@@ -8,16 +8,17 @@ from moviepy.editor import VideoFileClip
 TEMP_AUDIO_FILE = "temp/audio.wav"
 DEFAULT_LANGUAGE = "en"
 DEFAULT_DEVICE = "cuda"
+COMPUTE_TYPE = "float16"
 
 class WhisperInterface:
     def __init__(self, device=DEFAULT_DEVICE):
         self.device = device
-        self.model = whisper.load_model("medium", self.device)
+        self.model = whisperx.load_model("large-v2", self.device, compute_type=COMPUTE_TYPE, language=DEFAULT_LANGUAGE)
 
     # returns a touple with the first element being the word segments and the second being the no speech probability
     def transcription(self, audio_file):
         # transcribe with original whisper
-        result = self.model.transcribe(audio_file, initial_prompt="Umm, let me think like, hmm... Okay, here's what I'm, like, thinking.")
+        result = self.model.transcribe(audio_file, batch_size=4)
 
         # load alignment model and metadata TODO fix language not being found all the time
         model_a, metadata = whisperx.load_align_model(language_code=DEFAULT_LANGUAGE, device=self.device)
@@ -28,7 +29,6 @@ class WhisperInterface:
         except ValueError as e:
             print(e)
             return None
-
 
         return result_aligned["word_segments"]
     

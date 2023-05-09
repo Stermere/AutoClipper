@@ -53,9 +53,9 @@ class OpenAIUtils:
                 \"Title: your answer here\nDescription: your answer here\nTags: your \
                 answer here\" capitalization is important\
                 The description must be quite short just a small description of the video.\
-                The tags must be a comma separated listm there should be 20 of them.\
+                The tags must be a comma separated list there should be 15 of them.\
                 Make sure to add '{name}' in the appropriate places!\
-                The title should be very similar to the clip titles provided but not a copy,\
+                The title should be very similar to the clip titles provided and need not make sense just make it clickable,\
                 also make it relavant to the first clip."
         
         response = self.get_response(prompt)
@@ -91,7 +91,8 @@ class OpenAIUtils:
                 Your task is to order them from best to worst. Respond with a comma separated list of numbers enclosed by brackets like this [1, 2, 3].\
                 These are clips from a twitch streamer. You must order them to maximixe\
                 viwer retention as they will be edited together in the order you respond with.\
-                Prioritize the shorter clips as they are more likely to be watched."
+                Prioritize the shorter clips as they are more likely to be watched. Make sure clips with the same ID\
+                are always next to each other."
         
         prompt += "".join(titles) + prompt
 

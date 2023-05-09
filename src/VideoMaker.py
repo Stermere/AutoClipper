@@ -110,16 +110,17 @@ class VideoMaker:
             # populate the transcription titles and text data
             clip_text = ""
             for text in text_data:
-                clip_text += text["text"] + " "
+                clip_text += text["word"] + " "
             clip_text += "\n"
 
             transcriptions.append(clip_text)
-            titles.append(clip.title)
+            titles.append(clip.title + " ID:" + clip.video_id)
             text_times.append(text_data)
             durations.append(clip.duration)
 
         # now let the LLM choose the order of the clips
         print("Choosing order of clips...")
+
         order = self.ml_models.get_video_order(titles, transcriptions, durations)
 
         # ask the user if they want to override the LLM order
@@ -280,8 +281,17 @@ class VideoMaker:
         
         # print the text times
         print("Text times:")
+        to_remove = []
         for text_time in text_times:
-            print(f"\t{text_time['text']}: {text_time['start']} - {text_time['end']}")
+            if (text_time.keys() != {"word", "start", "end", "score"}):
+                print("Invalid text time format detected... fixing")
+                to_remove.append(text_time)
+                continue
+            print(f"\t{text_time['word']}: {text_time['start']} - {text_time['end']}")
+        
+        # remove any invalid text times
+        for text_time in to_remove:
+            text_times.remove(text_time)
         
         # start the clip a little before the first word
         start_time = text_times[0]["start"] - START_TRIM_TIME
@@ -291,7 +301,7 @@ class VideoMaker:
         for i in range(len(text_times) - 1, int(len(text_times) / 2), -1):
             # TODO make this more robustn
             # find the last word with a period and use that as the end time
-            word = text_times[i]["text"]
+            word = text_times[i]["word"]
             if "." in word or "?" in word or "!" in word:
                 end_time = text_times[i]["end"] + EDGE_TRIM_TIME
                 break
@@ -443,12 +453,12 @@ class VideoMaker:
             return False
 
         # delete all clips in the clip dir
-        for dir_ in os.listdir(DEFAULT_CLIP_DIR):
+        for clip in clips:
             try:
-                if os.path.exists(dir_):
-                    os.remove(dir_)
+                if os.path.exists(clip.clip_dir):
+                    os.remove(clip.clip_dir)
             except OSError:
-                print("Error while deleting file " + dir_)
+                print("Error while deleting file " + clip.clip_dir)
 
         return True
 
