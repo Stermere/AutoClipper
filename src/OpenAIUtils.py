@@ -10,7 +10,7 @@ API_KEY = config['OPENAI_API_KEY']
 DEFAULT_MODEL = config['DEFAULT_MODEL']
 
 # define the system message
-SYSTEM_MESSAGE = {"role": "system", "content": "You are a youtube video editor assistant. You must complete the task layed out by your user."}
+SYSTEM_MESSAGE = {"role": "system", "content": "You are a Youtube video editor assistant. You must complete the task layed out by your user."}
 
 class OpenAIUtils:
     def __init__(self, api_key=API_KEY):
@@ -18,7 +18,12 @@ class OpenAIUtils:
 
     # given a prompt return the response
     def get_response(self, prompt):
-        completion = openai.ChatCompletion.create(model=DEFAULT_MODEL, messages=[SYSTEM_MESSAGE, {"role": "user", "content": prompt}], max_tokens=300)
+        while True:
+            try:
+                completion = openai.ChatCompletion.create(model=DEFAULT_MODEL, messages=[SYSTEM_MESSAGE, {"role": "user", "content": prompt}], max_tokens=300)
+                break
+            except openai.error.RateLimitError as e:
+                input("OpenAI be struggling. Press enter to try again.")
         return completion.choices[0].message.content
     
     # given a channel and the transcript of the clip return the video info
@@ -55,8 +60,9 @@ class OpenAIUtils:
                 The description must be quite short just a small description of the video.\
                 The tags must be a comma separated list there should be 15 of them.\
                 Make sure to add '{name}' in the appropriate places!\
-                The title should be very similar to the clip titles provided and need not make sense just make it clickable,\
-                also make it relavant to the first clip."
+                The title must be eye catching and idealy be a teaser for the content of the first clip.\
+                With that being said make sure the title is short and to the point and maximize click through rate\
+                and viewer utility."
         
         response = self.get_response(prompt)
 
@@ -92,7 +98,7 @@ class OpenAIUtils:
                 These are clips from a twitch streamer. You must order them to maximixe\
                 viwer retention as they will be edited together in the order you respond with.\
                 Prioritize the shorter clips as they are more likely to be watched. Make sure clips with the same ID\
-                are always next to each other."
+                are next to each other as often as possible. Maximize viewer utility."
         
         prompt += "".join(titles) + prompt
 
