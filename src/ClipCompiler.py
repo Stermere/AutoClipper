@@ -75,8 +75,11 @@ class ClipCompiler:
             clips.remove(clips_to_merge[1])
 
             # remove the old clips from file
-            os.remove(clips_to_merge[0].clip_dir)
-            os.remove(clips_to_merge[1].clip_dir)
+            try:
+                os.remove(clips_to_merge[0].clip_dir)
+                os.remove(clips_to_merge[1].clip_dir)
+            except FileNotFoundError:
+                print('Could not find file to delete')
 
 
             # create the new clip object
@@ -107,7 +110,7 @@ class ClipCompiler:
         # find the merge point
         merge_point_1, merge_point_2, vid_fps_1, vid_fps_2 = self.get_merge_point(clip1, clip2)
 
-        if (merge_point_1 == None or merge_point_2 == None):
+        if (merge_point_1 == None and merge_point_2 == None):
             return None
 
         # using the merge point use moviepy to merge the clips
@@ -141,6 +144,10 @@ class ClipCompiler:
 
         # read the first frame
         ret, entry2 = cap.read()
+
+        if (entry2 is None or entry1 is None or ret is False):
+            print('Error: could not read frames')
+            return None, None, None, None
 
         # validate the frame sizes
         if (entry2.shape != entry1.shape):
