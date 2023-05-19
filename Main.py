@@ -37,10 +37,14 @@ if __name__ == '__main__':
         else:
             # check for the third arg of the time
             if len(sys.argv) < 4:
-                print('Usage: python3 Main.py -v channel_name time')
+                print('Usage: python3 Main.py -v channel_name streams to include')
                 exit(0)
+            if len(sys.argv) < 5:
+                vods_back = 0
+            else:
+                vods_back = int(sys.argv[4])
             
-            asyncio.run(VideoMaker.make_from_channel(sys.argv[2], time=float(sys.argv[3])))
+            asyncio.run(VideoMaker.make_from_channel(sys.argv[2], rest_time=int(sys.argv[3]), vods_back=vods_back))
 
     elif sys.argv[1] == '-c':
         # check for the second arg of the csv file specifying the clips

@@ -8,7 +8,7 @@ from src.TwitchAuthenticator import TwitchAuthenticator
 from src.WhisperInterface import WhisperInterface
 from src.OpenAIUtils import OpenAIUtils
 from src.YoutubeUploader import YoutubeUploader
-from src.cutFinder import find_cut_point
+from src.CutFinder import find_cut_point
 import datetime
 import json
 from copy import deepcopy
@@ -292,6 +292,10 @@ class VideoMaker:
         # remove any invalid text times
         for text_time in to_remove:
             text_times.remove(text_time)
+
+        # if there are no text times then return None
+        if len(text_times) == 0:
+            return None
         
         # start the clip a little before the first word
         start_time = text_times[0]["start"] - START_TRIM_TIME
@@ -410,7 +414,7 @@ class VideoMaker:
     # makes a video from a directory of clips and uses the default transition and content for the channel 
     # specified by channel_name
     @staticmethod
-    async def make_from_channel(channel_name, clip_count=VIDEOS_TO_FETCH, output_dir=DEFAULT_OUTPUT_DIR, transition_dir=DEFAULT_TRANSITION_DIR, time=LOOK_BACK_TIME, sort_by_views=SORT_BY_TIME):
+    async def make_from_channel(channel_name, clip_count=VIDEOS_TO_FETCH, output_dir=DEFAULT_OUTPUT_DIR, transition_dir=DEFAULT_TRANSITION_DIR, rest_time=2, sort_by_views=SORT_BY_TIME, vods_back=0):
         # init the twitch authenticator
         authenticator = TwitchAuthenticator()
 
@@ -428,7 +432,7 @@ class VideoMaker:
 
         print("Getting clips for " + users[0].display_name)
 
-        clips = clipGetter.get_clips(users[0], authenticator.get_client(), time=time, clip_dir=DEFAULT_CLIP_DIR, clip_count=clip_count)
+        clips = clipGetter.get_clips_recent(users[0], authenticator.get_client(), rest_time=rest_time, clip_dir=DEFAULT_CLIP_DIR, clip_count=clip_count, vods_back=vods_back)
 
         if len(clips) == 0:
             print("No clips found")
