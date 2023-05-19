@@ -1,7 +1,12 @@
 import soundfile as sf
 from moviepy.editor import VideoFileClip
+import math
 
 TEMP_AUDIO_FILE = "temp/audio.wav"
+
+# control how much the cup point can get adjusted
+# the higher the number the more the cut point can be adjusted
+CUT_ADJUSTMENT = 3
 
 
 def get_loudness(file):
@@ -16,13 +21,8 @@ def find_cut_point(video_file, current_cut):
 
     data = get_loudness(TEMP_AUDIO_FILE)[0]
 
-    # if the current cut is at the end of the video look for a cut point one second before
-    if current_cut > duration - 1:
-        current_cut = duration - 1
-
-
-    # slide a window of 1 second across the data and find a quiet spot
-    window_size = int((1 / duration) * len(data))
+    # slide a window of 0.1 second across the data and find a quiet spot
+    window_size = int((0.1 / duration) * len(data))
     hundreth_window_size = int(window_size / 100)
 
     # now that we have the data find the starting index of the cut and search from there
@@ -31,11 +31,11 @@ def find_cut_point(video_file, current_cut):
         start_index = 0
 
     # find a quiet spot with it one window size of the current cut
-    best_sum = 999
-    best_index = 999
+    best_sum = math.inf
+    best_index = math.inf
     weight = [x / window_size for x in range(window_size)]
 
-    end_point = len(data) - window_size
+    end_point = min(len(data) - window_size, start_index + (window_size * CUT_ADJUSTMENT))
     if start_index + window_size < end_point:
         end_point = start_index + window_size
 
