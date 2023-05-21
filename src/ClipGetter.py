@@ -50,7 +50,7 @@ class ClipGetter:
         start_time = (videos[vods_back]['created_at'].astimezone() - datetime.timedelta(hours=5)).isoformat()
         
         # get clips from this user's streams in the time after the stream started
-        clips = client.get_clips(user.id, started_at=start_time, page_size=clip_count)
+        clips = client.get_clips(user.id, started_at=start_time, page_size=100)
 
         # filter to only include clips from streams stream's back
         clips_temp = []
