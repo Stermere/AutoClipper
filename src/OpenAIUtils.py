@@ -17,11 +17,25 @@ class OpenAIUtils:
         openai.api_key = api_key
 
     # given a prompt return the response
-    def get_response(self, prompt):
+    def get_response(self, prompt, allow_reprompt=False):
+        # create the message list
+        chats = [SYSTEM_MESSAGE, {"role": "user", "content": prompt}]
         while True:
             try:
-                completion = openai.ChatCompletion.create(model=DEFAULT_MODEL, messages=[SYSTEM_MESSAGE, {"role": "user", "content": prompt}], max_tokens=300)
-                break
+                completion = openai.ChatCompletion.create(model=DEFAULT_MODEL, messages=chats, max_tokens=300)
+                if not allow_reprompt:
+                    break
+
+                chats.append({"role": "assistant", "content": completion.choices[0].message.content})
+
+                print(completion.choices[0].message.content + "\n")
+
+                # ask the user for a reprompt
+                prompt = input("Enter a reprompt (n or nothing to quit): ")
+                if prompt == 'n' or prompt == '':
+                    break
+                chats.append({"role": "user", "content": prompt})
+
             except openai.error.RateLimitError as e:
                 input("OpenAI be struggling. Press enter to try again.")
         return completion.choices[0].message.content
@@ -64,7 +78,7 @@ class OpenAIUtils:
                 With that being said make sure the title is short and to the point and maximize click through rate\
                 and viewer utility."
         
-        response = self.get_response(prompt)
+        response = self.get_response(prompt, allow_reprompt=True)
 
         # parse the response (this needs to be improved to handle the llm deciding to go off the rails)
         title = response.split('Title: ')[-1]
@@ -77,7 +91,7 @@ class OpenAIUtils:
         # add the postfix to the title
         title += f" | {name} clips"
 
-        # add a link to the description since the llm is not good at this
+        # add a link to the description since the llm is not good at this TODO move this out of here
         promo = f"If you enjoyed this video please consider checking out {name}'s channels!\n\n"
         description = f"{name}'s Socials\n -- Twitch: {twitch_link}\n -- Youtube: {youtube_link}\n" + promo + description
 
@@ -115,11 +129,6 @@ class OpenAIUtils:
         response = [int(i) for i in response]
 
         return response
-
-    # generate a set of time stamps for each clip in the video
-    def get_time_stamps(self, channel, transcript, clip_titles=[]):
-        # TODO
-        pass
 
 if __name__ == "__main__":
     openai_utils = OpenAIUtils()

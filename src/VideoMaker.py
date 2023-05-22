@@ -39,7 +39,7 @@ TRANSITION_FADE_TIME = config['TRANSITION_FADE_TIME'] # the time a fade in and o
 SHORT_CLIP_IN_FRONT = config['SHORT_CLIP_IN_FRONT'] # the number of the short clips to add to the front of the video
 
 # these are likly not going to change so they are not in the config file
-MIN_CLIP_LENGTH = 3.0
+MIN_CLIP_LENGTH = 10.0
 LENGTH_TO_TRIM_BACK =15.0
 LENGTH_TO_TRIM_FULL = 35.0
 TEMP_AUDIO_FILE = "temp/audio.wav"
@@ -83,19 +83,6 @@ class VideoMaker:
         durations = []
         used_clips = []
 
-        # open the temp clips file in the file manager
-        os.startfile(os.path.abspath(DEFAULT_CLIP_DIR))
-        input("Delete any clips you dont want in the video then press enter to continue...")
-
-        # repolulate the clip info
-        new_clips = []
-        for i, clip in enumerate(self.clips):
-            if not os.path.exists(clip.clip_dir):
-                print("Clip " + clip.clip_dir + " removed...")
-            else:
-                new_clips.append(clip)
-        self.clips = new_clips
-
         # populate transcriptions and titles
         print("Transcribing clips...")
         for clip in self.clips:
@@ -118,6 +105,10 @@ class VideoMaker:
             text_times.append(text_data)
             durations.append(clip.duration)
 
+        # open the temp clips file in the file manager
+        os.startfile(os.path.abspath(DEFAULT_CLIP_DIR))
+        print("\n\ndelete any clips you don't want in the video before confirming the order \n\n")
+
         # now let the LLM choose the order of the clips
         print("Choosing order of clips...")
 
@@ -125,6 +116,9 @@ class VideoMaker:
 
         # ask the user if they want to override the LLM order
         self.clips, text_times, transcriptions, titles, durations, order = self.modify_clip_order(self.clips, text_times, transcriptions, titles, durations, order)
+
+        # repolulate the clip
+        self.verify_clips_exist()
 
         # build the video from the clips
         for i, clip in enumerate(self.clips):
@@ -227,15 +221,9 @@ class VideoMaker:
 
                 vod_links += f"{i + 1}: {video.url}?t={vod_offset}\n"
 
-        # query the language model for the title, description, and tags (loop until we get a good result)
-        while True:
-            title, description, tags = self.ml_models.get_video_info(streamer_name, "Transcripts: ".join(transcriptions[:TRANSCRIPTS_IN_PROMPT]), clip_titles=[clip.title for clip in self.clips])
-            description += vod_links
-            print(f"Title: {title}\nDescription: {description}\nTags: {tags}\n")
-
-            ans = input("Is this good? (y/n): ")
-            if ans.lower() == "y":
-                break
+        title, description, tags = self.ml_models.get_video_info(streamer_name, "Transcripts: ".join(transcriptions[:TRANSCRIPTS_IN_PROMPT]), clip_titles=[clip.title for clip in self.clips])
+        description += vod_links
+        print(f"\n\nTitle: {title}\nDescription: {description}\nTags: {tags}\n\n")
 
         # TODO save info to a file so we can use it later if we want to
         # ie if we want to make a video with the same title just increment the number at the end
@@ -372,6 +360,7 @@ class VideoMaker:
     
     # allows the user to modify the order of the clips in the video
     def modify_clip_order(self, clips, text_times, transcriptions, titles, durations, order=None):
+        order_entered = False
         while True:
             # reorder the clips and text data
             if order != None:
@@ -381,6 +370,7 @@ class VideoMaker:
 
             for i, title in enumerate(titles):
                 print(f"Clip {i} {title} Duration: {clips[i].duration}")
+                print(transcriptions[i])
             print("\n")
 
             # if the LLM failed of the user wants to override the order
@@ -395,18 +385,32 @@ class VideoMaker:
                     for i in order:
                         if i < 0 or i >= len(clips):
                             raise ValueError
+                    order_entered = True
                 except ValueError:
                     print("Invalid format entered please try again")
                     order = None
                 continue
 
+            if order_entered:
+                break
+
             user_override = input("Would you like to modify the order (y/n):")
             if user_override == 'y':
                 order = None
-            elif user_override == 'n':
+            else:
                 break
 
         return clips, text_times, transcriptions, titles, durations, order
+    
+    # checks if the file of each clip exists and if not removes it from the list of clips
+    def verify_clips_exist(self):
+        new_clips = []
+        for i, clip in enumerate(self.clips):
+            if not os.path.exists(clip.clip_dir):
+                print("Clip " + clip.clip_dir + " removed...")
+            else:
+                new_clips.append(clip)
+        self.clips = new_clips
     
     def clamp(self, n, minn, maxn):
         return max(min(maxn, n), minn)
