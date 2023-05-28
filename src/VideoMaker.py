@@ -74,7 +74,7 @@ class VideoMaker:
 
         # certain creators specifically the ai streamers should not cut at the moment of silence
         if streamer_name.lower() in config["NO_CUT_STREAMERS"]:
-            self.cut_adjustment = 5.0
+            self.cut_adjustment = 2.0
             print("cut adjustment active for: " + streamer_name)
 
         text_times = []
@@ -267,17 +267,13 @@ class VideoMaker:
         if clip == None:
             return None
         
-        # print the text times
-        print("Text times:")
+        # remove any invalid text times
         to_remove = []
         for text_time in text_times:
             if (text_time.keys() != {"word", "start", "end", "score"}):
                 print("Invalid text time format detected... fixing")
                 to_remove.append(text_time)
                 continue
-            print(f"\t{text_time['word']}: {text_time['start']} - {text_time['end']}")
-        
-        # remove any invalid text times
         for text_time in to_remove:
             text_times.remove(text_time)
 
@@ -418,7 +414,7 @@ class VideoMaker:
     # makes a video from a directory of clips and uses the default transition and content for the channel 
     # specified by channel_name
     @staticmethod
-    async def make_from_channel(channel_name, clip_count=VIDEOS_TO_FETCH, output_dir=DEFAULT_OUTPUT_DIR, transition_dir=DEFAULT_TRANSITION_DIR, rest_time=2, sort_by_views=SORT_BY_TIME, vods_back=0):
+    async def make_from_channel(channel_name, clip_count=VIDEOS_TO_FETCH, output_dir=DEFAULT_OUTPUT_DIR, transition_dir=DEFAULT_TRANSITION_DIR, sort_by_views=SORT_BY_TIME, vods_back=0):
         # init the twitch authenticator
         authenticator = TwitchAuthenticator()
 
@@ -436,7 +432,7 @@ class VideoMaker:
 
         print("Getting clips for " + users[0].display_name)
 
-        clips = clipGetter.get_clips_recent(users[0], authenticator.get_client(), rest_time=rest_time, clip_dir=DEFAULT_CLIP_DIR, clip_count=clip_count, vods_back=vods_back)
+        clips = clipGetter.get_clips_recent(users[0], authenticator.get_client(), clip_dir=DEFAULT_CLIP_DIR, clip_count=clip_count, vods_back=vods_back)
 
         if len(clips) == 0:
             print("No clips found")

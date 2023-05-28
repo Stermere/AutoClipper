@@ -30,7 +30,7 @@ class ClipGetter:
         return clip_name
 
     # get the most popular clips from a streamer and download them
-    def get_clips_recent(self, user, client, rest_time=2, clip_dir=DEFAULT_SAVE_DIR, clip_count=15, vods_back=0):
+    def get_clips_recent(self, user, client, clip_dir=DEFAULT_SAVE_DIR, clip_count=15, vods_back=0):
         # get the video id's of the streams that occured in the last streams streams
         videos = client.get_videos(user_id=user.id)
 
@@ -39,9 +39,6 @@ class ClipGetter:
 
         # sort the videos by creation time
         videos.sort(key=lambda x: x['created_at'], reverse=True)
-
-        # remove videos that are newer than rest_time hours
-        videos = [video for video in videos if video['created_at'] < datetime.datetime.now() - datetime.timedelta(hours=rest_time)]
 
         # get the video and its id
         video_id = videos[vods_back]['id']
@@ -52,7 +49,7 @@ class ClipGetter:
         # get clips from this user's streams in the time after the stream started
         clips = client.get_clips(user.id, started_at=start_time, page_size=100)
 
-        # filter to only include clips from streams stream's back
+        # filter to only include clips that are from the most recent stream
         clips_temp = []
         i = 0
         for clip in clips:
