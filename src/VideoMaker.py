@@ -321,15 +321,7 @@ class VideoMaker:
         os.startfile(os.path.abspath(clip.clip_dir))
 
         # get a yes or no from the user
-        result = get_bool("Is this clip good? (y/n):")
-
-        # if the user said no then delete the clip
-        if not result:
-            try:
-                if os.path.exists(clip.clip_dir):
-                    os.remove(clip.clip_dir)
-            except OSError:
-                print("Error while deleting file " + clip.clip_dir)
+        return get_bool("Is this clip good? (y/n):")
     
     # TODO keep track of the clip ID's that have been used so we don't use them again
     def write_channel_info(self, channel_name, title, description, tags):
@@ -455,8 +447,12 @@ class VideoMaker:
         clips = clips[:clip_count]
 
         # have the user evaluate the clips
+        temp_clips = []
         for clip in clips:
-            VideoMaker.human_eval_clip(clip)
+            result = VideoMaker.human_eval_clip(clip)
+            if result:
+                temp_clips.append(clip)
+        clips = temp_clips
 
         # sort all the clips
         if sort_by_time:
