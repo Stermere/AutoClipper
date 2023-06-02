@@ -9,6 +9,7 @@ from src.WhisperInterface import WhisperInterface
 from src.OpenAIUtils import OpenAIUtils
 from src.YoutubeUploader import YoutubeUploader
 from src.CutFinder import find_cut_point
+from src.UserInput import get_int, get_bool
 import datetime
 import json
 from copy import deepcopy
@@ -67,6 +68,10 @@ class VideoMaker:
 
     # makes a video from the clips Returns True if successful
     def make_video(self):
+
+        # check if all the clips have a valid clip dir
+        self.verify_clips_exist()
+
         # second thing lets combine all the clips in clip_dirs
         videos = []
         added_transition = False
@@ -74,7 +79,7 @@ class VideoMaker:
 
         # certain creators specifically the ai streamers should not cut at the moment of silence
         if streamer_name.lower() in config["NO_CUT_STREAMERS"]:
-            self.cut_adjustment = 2.0
+            self.cut_adjustment = 100
             print("cut adjustment active for: " + streamer_name)
 
         text_times = []
@@ -105,10 +110,6 @@ class VideoMaker:
             text_times.append(text_data)
             durations.append(clip.duration)
 
-        # open the temp clips file in the file manager
-        os.startfile(os.path.abspath(DEFAULT_CLIP_DIR))
-        print("\n\ndelete any clips you don't want in the video before confirming the order \n\n")
-
         # now let the LLM choose the order of the clips
         print("Choosing order of clips...")
 
@@ -117,16 +118,13 @@ class VideoMaker:
         # ask the user if they want to override the LLM order
         self.clips, text_times, transcriptions, titles, durations, order = self.modify_clip_order(self.clips, text_times, transcriptions, titles, durations, order)
 
-        # repolulate the clip
-        self.verify_clips_exist()
-
         # build the video from the clips
         for i, clip in enumerate(self.clips):
             # get the text data
             text_data = text_times[i]
 
             # run the video through the filter to get the subclip we want
-            filter_result = self.filter_clips(clip.clip_dir, text_data)
+            filter_result = self.filter_clip(clip, text_data)
 
             # if None the clip was completely rejected
             if filter_result == None:
@@ -225,6 +223,8 @@ class VideoMaker:
         description += vod_links
         print(f"\n\nTitle: {title}\nDescription: {description}\nTags: {tags}\n\n")
 
+        os.startfile(os.path.abspath(save_name))
+
         # TODO save info to a file so we can use it later if we want to
         # ie if we want to make a video with the same title just increment the number at the end
         # or if we want to make sure we don't make a video to soon after another one
@@ -241,9 +241,9 @@ class VideoMaker:
         return True
     
     # filter the clips to not include time periods where the streamer is not talking
-    def filter_clips(self, clip_dir, text_data):
+    def filter_clip(self, clip, text_data):
         # load the clip 
-        clip_video = VideoFileClip(clip_dir)
+        clip_video = VideoFileClip(clip.clip_dir)
 
         print("Clip length before trim: " + str(clip_video.duration))
 
@@ -253,7 +253,7 @@ class VideoMaker:
             return clip_video
 
         # trim the clip to remove silence at the beginning and end
-        clip_video = self.trim_clip(clip_video, text_data, clip_dir)
+        clip_video = self.trim_clip(clip_video, text_data, clip.clip_dir)
 
         # if the clip was rejected then return None
         if clip_video == None:
@@ -263,8 +263,8 @@ class VideoMaker:
         return clip_video
     
     # trims the clip to remove silence at the beginning and to cut of at the end of a sentence
-    def trim_clip(self, clip, text_times, clip_dir):
-        if clip == None:
+    def trim_clip(self, video_clip, text_times, clip_dir):
+        if video_clip == None:
             return None
         
         # remove any invalid text times
@@ -283,7 +283,7 @@ class VideoMaker:
         
         # start the clip a little before the first word
         start_time = text_times[0]["start"] - START_TRIM_TIME
-        end_time = clip.duration
+        end_time = video_clip.duration
         
         # only search the last 1/3 of the clip for the end time (sometimes the transcript forgets to add a period at the end)
         for i in range(len(text_times) - 1, int(len(text_times) / 2), -1):
@@ -301,23 +301,41 @@ class VideoMaker:
         end_time = find_cut_point(clip_dir, end_time)
 
         # if the start and end times are to close together default to the start time being 0
-        if (clip.duration < LENGTH_TO_TRIM_FULL or end_time - start_time < MIN_CLIP_LENGTH):
+        if (video_clip.duration < LENGTH_TO_TRIM_FULL or end_time - start_time < MIN_CLIP_LENGTH):
             start_time = 0
 
         # print the duration of the clip
         print("Clip duration after trim: " + str(end_time - start_time))
 
         # if the start and end times are to close then we reject the clip
-        clip = clip.subclip(self.clamp(start_time, 0, clip.duration), self.clamp(end_time, 0, clip.duration))
-        if (clip.duration < MIN_CLIP_LENGTH):
+        video_clip = video_clip.subclip(self.clamp(start_time, 0, video_clip.duration), self.clamp(end_time, 0, video_clip.duration))
+        if (video_clip.duration < MIN_CLIP_LENGTH):
             return None
         
-        return clip
+        return video_clip
     
+    # opens the clip provided in the default video player for the user to evaluate
+    # expects this projects Clip object
+    @staticmethod
+    def human_eval_clip(clip):
+        os.startfile(os.path.abspath(clip.clip_dir))
+
+        # get a yes or no from the user
+        result = get_bool("Is this clip good? (y/n):")
+
+        # if the user said no then delete the clip
+        if not result:
+            try:
+                if os.path.exists(clip.clip_dir):
+                    os.remove(clip.clip_dir)
+            except OSError:
+                print("Error while deleting file " + clip.clip_dir)
+    
+    # TODO keep track of the clip ID's that have been used so we don't use them again
     def write_channel_info(self, channel_name, title, description, tags):
         pass
 
-    # sorts the clips by time and then moves some short ones to the front
+    # sorts the clips
     @staticmethod
     def sort_clips(clips, key=lambda x: x.time, reverse=False):
         clips.sort(key=key, reverse=reverse)
@@ -333,24 +351,6 @@ class VideoMaker:
         for reject in rejects:
             clips.remove(reject)
             clips.append(reject)
-
-        # get the shortest three clips move them to the front of the list
-        clips_copy = deepcopy(clips)
-
-        # sort the clips by length
-        clips_copy.sort(key=lambda x: x.duration, reverse=False)
-
-        # get the shortest three clips
-        shortest_clips = clips_copy[:3]
-
-        # add at the front
-        for clip in shortest_clips:
-            # find the clip with the same id and remove it
-            for c in clips:
-                if c.clip_id == clip.clip_id:
-                    clips.pop(clips.index(c))
-                    break
-        clips = shortest_clips + clips
 
         return clips
     
@@ -414,7 +414,7 @@ class VideoMaker:
     # makes a video from a directory of clips and uses the default transition and content for the channel 
     # specified by channel_name
     @staticmethod
-    async def make_from_channel(channel_name, clip_count=VIDEOS_TO_FETCH, output_dir=DEFAULT_OUTPUT_DIR, transition_dir=DEFAULT_TRANSITION_DIR, sort_by_views=SORT_BY_TIME, vods_back=0):
+    async def make_from_channel(channel_name, clip_count=VIDEOS_TO_FETCH, output_dir=DEFAULT_OUTPUT_DIR, transition_dir=DEFAULT_TRANSITION_DIR, sort_by_time=SORT_BY_TIME, vods_back=0):
         # init the twitch authenticator
         authenticator = TwitchAuthenticator()
 
@@ -438,10 +438,28 @@ class VideoMaker:
             print("No clips found")
             return False
 
-        print("\nGot clips... making video\n")
+        print("\nClips downloaded...\n")
+
+        # get user input 
+        clip_count = get_int("How many clips would you like to use? (Enter a number or 'all') ", 1, len(clips))
+        
+        # delete any clips that are not in the top clip_count
+        del_clips = clips[clip_count:]
+        for clip in del_clips:
+            try:
+                if os.path.exists(clip.clip_dir):
+                    os.remove(clip.clip_dir)
+            except OSError:
+                print("Error while deleting file " + clip.clip_dir)
+
+        clips = clips[:clip_count]
+
+        # have the user evaluate the clips
+        for clip in clips:
+            VideoMaker.human_eval_clip(clip)
 
         # sort all the clips
-        if sort_by_views:
+        if sort_by_time:
             clips = VideoMaker.sort_clips(clips)
 
         # make sure the output dir exists
@@ -450,6 +468,7 @@ class VideoMaker:
 
         # now lets make the video
         video_maker = VideoMaker(clips, output_dir, transition_dir=transition_dir, authenticator=authenticator)
+        video_maker.verify_clips_exist()
 
         status = video_maker.make_video()
 
