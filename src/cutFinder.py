@@ -32,7 +32,7 @@ def find_cut_point(video_file, current_cut):
 
     # find a quiet spot with it one window size of the current cut
     best_sum = math.inf
-    best_index = math.inf
+    best_index = len(data)
     weight = [x / window_size for x in range(window_size)]
 
     end_point = min(len(data) - window_size, start_index + (window_size * CUT_ADJUSTMENT))
@@ -48,10 +48,10 @@ def find_cut_point(video_file, current_cut):
         # check if this is the best window
         if window_sum < best_sum:
             best_sum = window_sum
-            best_index = i + window_size - (window_size / 10)
+            best_index = i + window_size
 
     # return the best cut time
-    return best_index / len(data) * duration
+    return (best_index / len(data)) * duration
 
 
 if __name__ == "__main__":
