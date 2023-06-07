@@ -1,7 +1,6 @@
 # handles all the interaction with WhisperX for transcriptions and uderance times
 
 import whisperx
-import whisper
 
 from moviepy.editor import VideoFileClip
 
