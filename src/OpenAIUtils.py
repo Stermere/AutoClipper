@@ -111,8 +111,8 @@ class OpenAIUtils:
                 Your task is to order them from best to worst. Respond with a comma separated list of numbers enclosed by brackets like this [1, 2, 3].\
                 These are clips from a twitch streamer. You must order them to maximixe\
                 viwer retention as they will be edited together in the order you respond with.\
-                Prioritize the shorter clips as they are more likely to be watched. Make sure clips with the same ID\
-                are next to each other as often as possible. Maximize viewer utility."
+                Make sure clips with the same ID are next to each other as often as possible.\
+                Maximize viewer utility."
         
         prompt += "".join(titles) + prompt
 
