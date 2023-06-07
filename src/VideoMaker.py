@@ -5,7 +5,6 @@ from src.ClipGetter import ClipGetter
 from src.Clip import Clip
 from src.ClipCompiler import ClipCompiler
 from src.TwitchAuthenticator import TwitchAuthenticator
-from src.WhisperInterface import WhisperInterface
 from src.OpenAIUtils import OpenAIUtils
 from src.YoutubeUploader import YoutubeUploader
 from src.CutFinder import find_cut_point
@@ -57,23 +56,19 @@ class VideoMaker:
         self.transition_dir = transition_dir
         self.authenticator = authenticator
 
-        # used to get time stamps of words in the audio
-        self.audio_to_text = WhisperInterface()
-
         # used to get the title, description, and tags using a LLM and a more advanced transcription
         self.ml_models = OpenAIUtils()
 
         # creator specific settings
         self.cut_adjustment = 0.0 # the amount of time to add to the cut point
 
-    # makes a video from the clips Returns True if successful
+    # makes a clip compilation from the clips Returns True if successful
     def make_video(self):
-
         # check if all the clips have a valid clip dir
         self.verify_clips_exist()
 
-        # second thing lets combine all the clips in clip_dirs
         videos = []
+        used_clips = []
         added_transition = False
         streamer_name = self.clips[0].clip_dir.split('/')[-1].split('_')[0]
 
@@ -82,33 +77,7 @@ class VideoMaker:
             self.cut_adjustment = 100
             print("cut adjustment active for: " + streamer_name)
 
-        text_times = []
-        transcriptions = []
-        titles = []
-        durations = []
-        used_clips = []
-
-        # populate transcriptions and titles
-        print("Transcribing clips...")
-        for clip in self.clips:
-            # get the text and time stamps
-            text_data = self.audio_to_text.transcribe_from_video(clip.clip_dir)
-
-            if text_data == None:
-                print("Clip " + clip.clip_dir + " has problematic audio removing...")
-                self.clips.remove(clip)
-                continue
-
-            # populate the transcription titles and text data
-            clip_text = ""
-            for text in text_data:
-                clip_text += text["word"] + " "
-            clip_text += "\n"
-
-            transcriptions.append(clip_text)
-            titles.append(clip.title + " ID:" + clip.video_id)
-            text_times.append(text_data)
-            durations.append(clip.duration)
+        text_times, transcriptions, titles, durations = self.get_clip_data()
 
         # now let the LLM choose the order of the clips
         print("Choosing order of clips...")
@@ -180,7 +149,7 @@ class VideoMaker:
         final_clip = concatenate_videoclips(videos, method="compose")
     
         # check the length of the video
-        if not self.check_time(final_clip, REQUIRED_VIDEO_LENGTH):
+        if (final_clip.duration < REQUIRED_VIDEO_LENGTH):
             print("The video is only " + str(final_clip.duration) + " seconds long aborting...")
             return False
         
@@ -235,10 +204,46 @@ class VideoMaker:
 
         return True
     
-    def check_time(self, clip, target_time):
-        if (clip.duration < target_time):
-            return False
-        return True
+    # makes many videos from the clips provided and uploads them to youtube as standalone videos
+    def make_videos_from_clips(self, clips):
+        pass
+
+
+    # returns the text data, transcriptions, titles, and durations of the clips
+    # this is used to make the LLM prompt
+    def get_clip_data(self):
+        text_times = []
+        transcriptions = []
+        titles = []
+        durations = []
+
+        # load the whisper model
+        from src.WhisperInterface import WhisperInterface
+        audio_to_text = WhisperInterface()
+
+        # populate transcriptions and titles
+        print("Transcribing clips...")
+        for clip in self.clips:
+            # get the text and time stamps
+            text_data = audio_to_text.transcribe_from_video(clip.clip_dir)
+
+            if text_data == None:
+                print("Clip " + clip.clip_dir + " has problematic audio removing...")
+                self.clips.remove(clip)
+                continue
+
+            # populate the transcription titles and text data
+            clip_text = ""
+            for text in text_data:
+                clip_text += text["word"] + " "
+            clip_text += "\n"
+
+            transcriptions.append(clip_text)
+            titles.append(clip.title + " ID:" + clip.video_id)
+            text_times.append(text_data)
+            durations.append(clip.duration)
+
+        return text_times, transcriptions, titles, durations
     
     # filter the clips to not include time periods where the streamer is not talking
     def filter_clip(self, clip, text_data):
@@ -314,38 +319,6 @@ class VideoMaker:
         
         return video_clip
     
-    # opens the clip provided in the default video player for the user to evaluate
-    # expects this projects Clip object
-    @staticmethod
-    def human_eval_clip(clip):
-        os.startfile(os.path.abspath(clip.clip_dir))
-
-        # get a yes or no from the user
-        return get_bool("Is this clip good? (y/n):")
-    
-    # TODO keep track of the clip ID's that have been used so we don't use them again
-    def write_channel_info(self, channel_name, title, description, tags):
-        pass
-
-    # sorts the clips
-    @staticmethod
-    def sort_clips(clips, key=lambda x: x.time, reverse=False):
-        clips.sort(key=key, reverse=reverse)
-
-        # if multiple clips have the same title then move those to the end of the list
-        rejects = []
-        for i in range(len(clips)):
-            for j in range(i + 1, len(clips)):
-                if clips[i].title == clips[j].title:
-                    rejects.append(clips[j])
-                    break
-
-        for reject in rejects:
-            clips.remove(reject)
-            clips.append(reject)
-
-        return clips
-    
     # allows the user to modify the order of the clips in the video
     def modify_clip_order(self, clips, text_times, transcriptions, titles, durations, order=None):
         order_entered = False
@@ -400,8 +373,37 @@ class VideoMaker:
                 new_clips.append(clip)
         self.clips = new_clips
     
-    def clamp(self, n, minn, maxn):
+    @staticmethod
+    def clamp(n, minn, maxn):
         return max(min(maxn, n), minn)
+    
+    # opens the clip provided in the default video player for the user to evaluate
+    # expects this projects Clip object
+    @staticmethod
+    def human_eval_clip(clip):
+        os.startfile(os.path.abspath(clip.clip_dir))
+
+        # get a yes or no from the user
+        return get_bool("Is this clip good? (y/n):")
+
+    # sorts the clips
+    @staticmethod
+    def sort_clips(clips, key=lambda x: x.time, reverse=False):
+        clips.sort(key=key, reverse=reverse)
+
+        # if multiple clips have the same title then move those to the end of the list
+        rejects = []
+        for i in range(len(clips)):
+            for j in range(i + 1, len(clips)):
+                if clips[i].title == clips[j].title:
+                    rejects.append(clips[j])
+                    break
+
+        for reject in rejects:
+            clips.remove(reject)
+            clips.append(reject)
+
+        return clips
                 
     # makes a video from a directory of clips and uses the default transition and content for the channel 
     # specified by channel_name
