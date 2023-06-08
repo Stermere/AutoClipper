@@ -2,6 +2,7 @@
 # is usful for automatic scheduling of the videos
 
 import json
+from src.Clip import Clip
 
 
 class YoutubeHistory:
@@ -23,20 +24,27 @@ class YoutubeHistory:
             json.dump(self.history, f)
 
     def addVideo(self, relevant_clips, upload_time):
-        if type(relevant_clips) != list:
-            Exception("relevant_clips must be a list")
+        if type(relevant_clips) != list or len(relevant_clips) == 0:
+            Exception("relevant_clips must be a non-empty list")
+        if type(relevant_clips[1]) != Clip:
+            Exception("relevant_clips must be a list of Clip objects")
+
+        # convert the clips to strings
+        relevant_clips = [clip.to_string() for clip in relevant_clips]
+
         self.history.append({"clips" : relevant_clips, "upload_time" : upload_time})
         self.saveHistory()
 
     def getLatestVideo(self):
         if len(self.history) > 0:
-            return self.history[-1]
+            self.history[-1]
+            return [Clip.from_string(clip) for clip in self.history[-1]["clips"]], self.history[-1]["upload_time"] 
         else:
             return None
         
     # checks that the clip in question has not already been uploaded
     def checkForClip(self, clip):
         for video in self.history:
-            if clip in video["clips"]:
+            if clip.to_string() in video["clips"]:
                 return True
         return False
