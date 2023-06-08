@@ -19,7 +19,7 @@ with open('config.json') as f:
 DEFAULT_CLIP_DIR = config['DEFAULT_CLIP_DIR']
 DEFAULT_CLIP_INFO_DIR = config['DEFAULT_CLIP_INFO_DIR']
 
-if __name__ == '__main__':
+def main():
     if len(sys.argv) < 2 or sys.argv[1] == '-h' or sys.argv[1] == '--help':
         print('Usage: python3 Main.py <task>\n <task> can be one of the following:\n-l: lurk chat\n-v render a video\n-c combine clips\n--h: help menu (this menu)')
         exit(0)
@@ -28,19 +28,21 @@ if __name__ == '__main__':
         chat_classifier(sys.argv)
 
     elif sys.argv[1] == '-v':
-        # check for the second arg of the directory of the clips
+        # check for the second arg for the streamer name
         if len(sys.argv) < 3:
-            print('Usage: python3 Main.py -v clip_info_dir')
+            print('Usage: python3 Main.py -v streamer_name <target_stream>')
             exit(0)
-        if sys.argv[2].endswith('.csv'):
-            asyncio.run(VideoMaker.make_from_csv(sys.argv[2]))
-        else:
-            # check for the third arg of the time
-            if len(sys.argv) < 4:
-                print('Usage: python3 Main.py -v channel_name target_stream ')
-                exit(0)
-            
-            asyncio.run(VideoMaker.make_from_channel(sys.argv[2], vods_back=int(sys.argv[3])))
+        # check for the third arg of the target stream
+        vods_back = 0
+        if len(sys.argv) >= 4:
+            vods_back = int(sys.argv[3])  
+        asyncio.run(VideoMaker.make_from_channel(sys.argv[2], vods_back=vods_back))
+
+    elif sys.argv[1] == '-mv':
+        if len(sys.argv) < 3:
+            print('Usage: python3 Main.py -mv streamer_name')
+            exit(0)
+        print("UNIMPLEMENTED")
 
     elif sys.argv[1] == '-c':
         # check for the second arg of the csv file specifying the clips
@@ -63,14 +65,10 @@ if __name__ == '__main__':
         
         for clip_info in clip_infos:
             os.remove(os.path.join(DEFAULT_CLIP_INFO_DIR, clip_info))
-
-    elif sys.argv[1] == '-auto':
-        # run the clip compiler and then the video maker on every csv 
-        # file in the directory if there is a clip older than 8 hours
-        # and the total length of the clips is greater than 5 minutes 
-        asyncio.run(VideoMaker.make_from_csvs())
-        
+     
     else:
         print('Usage: python3 Main.py <task>\n <task> can be one of the following:\n-l: lurk chat\n-v render a video\n-c combine clips\n--h: help menu (this menu)')
-        
-    quit(1)
+
+
+if __name__ == '__main__':
+    main()
