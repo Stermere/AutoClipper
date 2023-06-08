@@ -9,9 +9,9 @@ from src.OpenAIUtils import OpenAIUtils
 from src.YoutubeUploader import YoutubeUploader
 from src.CutFinder import find_cut_point
 from src.UserInput import get_int, get_bool
+from src.YoutubeHistory import YoutubeHistory
 import datetime
 import json
-from copy import deepcopy
 
 with open('config.json') as f:
     config = json.load(f)
@@ -48,6 +48,7 @@ TRANSCRIPTS_IN_PROMPT = 4 # the number of transcripts to add to the prompt
 
 
 class VideoMaker:
+    # TODO update the constructor to be better
     def __init__(self, clips, output_dir, intro_clip_dir=None, outro_clip_dir=None, transition_dir=None, authenticator=None):
         self.intro_clip_dir = intro_clip_dir
         self.outro_clip_dir = outro_clip_dir
@@ -55,6 +56,7 @@ class VideoMaker:
         self.output_dir = output_dir
         self.transition_dir = transition_dir
         self.authenticator = authenticator
+        self.uploaded_videos = YoutubeHistory()
 
         # used to get the title, description, and tags using a LLM and a more advanced transcription
         self.ml_models = OpenAIUtils()
@@ -168,45 +170,75 @@ class VideoMaker:
         # release any resources used by the video
         final_clip.close()
 
-        # get the vod link time stamps
         vod_links = ""
-        if self.authenticator != None:
-            vod_links += "\nLinks to Vod:\n"
-            for i, clip in enumerate(self.clips):
-                if clip.vod_offset == None:
-                    continue
-                video = self.authenticator.get_videos_from_ids([clip.video_id])
+        for i, clip in enumerate(self.clips):
+            vod_links += f"clip {i+1}: {self.get_vod_link(clip)}\n"
 
-                if len(video) == 0:
-                    continue
-                video = video[0]
 
-                # convert the vod offset to a minutes:seconds format
-                minutes = clip.vod_offset // 60
-                seconds = clip.vod_offset % 60
-                vod_offset = f"{minutes}m{seconds}s"
-
-                vod_links += f"{i + 1}: {video.url}?t={vod_offset}\n"
-
-        title, description, tags = self.ml_models.get_video_info(streamer_name, "Transcripts: ".join(transcriptions[:TRANSCRIPTS_IN_PROMPT]), clip_titles=[clip.title for clip in self.clips])
+        title, description, tags = self.ml_models.get_video_info(streamer_name, "Transcripts: ".join(transcriptions[:TRANSCRIPTS_IN_PROMPT]), [clip.title for clip in self.clips])
         description += vod_links
         print(f"\n\nTitle: {title}\nDescription: {description}\nTags: {tags}\n\n")
 
         os.startfile(os.path.abspath(save_name))
 
-        # TODO save info to a file so we can use it later if we want to
-        # ie if we want to make a video with the same title just increment the number at the end
-        # or if we want to make sure we don't make a video to soon after another one
-
         # upload the video to youtube
         youtube = YoutubeUploader()
         youtube.upload(title, description, tags, "private", save_name, None)
 
+        # add the video to the history
+        self.youtube_history.addVideo(self.clips, datetime.datetime.now())
+
         return True
     
     # makes many videos from the clips provided and uploads them to youtube as standalone videos
-    def make_videos_from_clips(self, clips):
-        pass
+    def make_videos_from_clips(self):
+        # check if all the clips have a valid clip dir
+        self.verify_clips_exist()
+
+        youtube = YoutubeUploader()
+        streamer_name = self.clips[0].clip_dir.split('/')[-1].split('_')[0]
+        text_times, transcriptions, titles, durations = self.get_clip_data()
+
+        # get the time of the last uploaded video and schedule the video to be uploaded after that
+        video = self.youtube_history.getLatestVideo()
+        video_time = datetime.datetime.now()
+        if video != None:
+            video_time = video["upload_time"]
+
+        # add 6 hours to the video time TODO make this tuneable
+        video_time += datetime.timedelta(hours=6)
+
+        for i, clip in enumerate(self.clips):
+            if durations[i] < REQUIRED_VIDEO_LENGTH:
+                print("Clip to short for standalone video skipping...")
+                continue
+            # add a fade in and out to the video
+            video_clip = VideoFileClip(clip.clip_dir).fx(vfx.fadein, FADE_TIME).fx(vfx.fadeout, FADE_TIME)
+            video_clip = video_clip.audio_fadeout(FADE_TIME)
+
+            # get the save name
+            save_name = self.output_dir + streamer_name + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + '.mp4'
+
+            # render the video
+            video_clip.write_videofile(save_name, threads=4)
+
+            # release any resources used by the video
+            video_clip.close()
+
+            vod_link = self.get_vod_link(clip)
+
+            title, description, tags = self.ml_models.get_video_info(streamer_name, "Transcripts: ".join(transcriptions[i]), [self.clips[i].title])
+            description += "Link to the vod: " + vod_link
+            print(f"\n\nTitle: {title}\nDescription: {description}\nTags: {tags}\n\n")
+
+            os.startfile(os.path.abspath(save_name))
+
+
+            # upload the video to youtube
+            youtube.upload(title, description, tags, "private", save_name, None, publishAt=video_time)
+            self.youtube_history.addVideo([clip], video_time)
+            video_time += datetime.timedelta(hours=6)
+
 
 
     # returns the text data, transcriptions, titles, and durations of the clips
@@ -363,6 +395,25 @@ class VideoMaker:
 
         return clips, text_times, transcriptions, titles, durations, order
     
+    # gets the vod link for the given clip
+    def get_vod_link(self, clip):
+        if self.authenticator == None:
+            raise Exception("Authenticator not set")
+        if clip.vod_offset == None:
+            return None
+        
+        video = self.authenticator.get_videos_from_ids([clip.video_id])
+        if len(video) == 0:
+            return None
+        
+        video = video[0]
+        minutes = clip.vod_offset // 60
+        seconds = clip.vod_offset % 60
+        vod_offset = f"{minutes}m{seconds}s"
+        vod_link = f"{video.url}?t={vod_offset}"
+
+        return vod_link
+    
     # checks if the file of each clip exists and if not removes it from the list of clips
     def verify_clips_exist(self):
         new_clips = []
@@ -435,7 +486,7 @@ class VideoMaker:
         print("\nClips downloaded...\n")
 
         # get user input 
-        clip_count = get_int("How many clips would you like to use? (Enter a number or 'all') ", 1, len(clips))
+        clip_count = get_int("How many clips would you like to use? (Enter a number) ", 1, len(clips))
         
         # delete any clips that are not in the top clip_count
         del_clips = clips[clip_count:]
@@ -483,68 +534,8 @@ class VideoMaker:
 
         return True
 
-    # makes a video from a csv file that specifies the clips to use csv_dir can be a csv file or a directory of csv files
+    # makes many video's from the top few clips on each channel specified
     @staticmethod
-    async def make_from_csv(csv_dir, output_dir=DEFAULT_OUTPUT_DIR , transition_dir=DEFAULT_TRANSITION_DIR):
-        # combine any overlaping clips
-        clip_compiler = ClipCompiler()
-        clip_compiler.merge_clips(csv_dir)
-        
-        # load in the csv
-        clips = []
-        with open(csv_dir, 'r') as f:
-            lines = f.readlines()
-        for line in lines:
-            clips.append(Clip.from_string(line))
-
-        # only proceed if there are at least REQUIRED_CLIPS clips
-        if len(clips) < REQUIRED_CLIP_NUM:
-            print("Not enough clips to make a video")
-            return False
-
-        # sort the clips by time
-        if (SORT_BY_TIME):
-            clips = VideoMaker.sort_clips(clips)          
-
-        # get the clip dirs
-        dirs = [clip.clip_dir for clip in clips]
-
-        # make sure the output dir exists
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-        
-        # now lets make the video
-        video_maker = VideoMaker(clips, output_dir, transition_dir=transition_dir)
-
-        status = video_maker.make_video()
-
-        if not status:
-            return False
-
-        # delete the clips
-        for dir_ in dirs:
-            try:
-                if os.path.exists(dir_):
-                    os.remove(dir_)
-            except OSError:
-                # if one file is not deleted its not a big deal
-                pass
-
-        # remove all the clips from the csv
-        with open(csv_dir, 'w') as f:
-            f.write('')
-
-    # makes all a video from each csv specified in the csv provided
-    @staticmethod
-    async def make_from_csvs(clip_info=DEFAULT_CLIP_INFO_DIR):
-        # get a count of the videos per channel by reading the csv's in the clip info dir
-        dirs = os.listdir(clip_info)
-
-        # make a video for each channel
-        for dir_ in dirs:
-            await VideoMaker.make_from_csv(clip_info + '/' + dir_)
-
-        # remove all the clips from the csv
-        for dir_ in dirs:
-            with open(dir_, 'w') as f:
-                f.write('')
+    async def make_from_top_clips(channel_names, num_videos):
+        # TODO implement this
+        pass

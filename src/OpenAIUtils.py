@@ -41,7 +41,10 @@ class OpenAIUtils:
         return completion.choices[0].message.content
     
     # given a channel and the transcript of the clip return the video info
-    def get_video_info(self, channel, transcript, clip_titles=[]):
+    def get_video_info(self, channel, transcript, clip_titles):
+        if type(clip_titles) != list:
+            raise Exception("clip_titles must be a list")
+
         # remove duplicate titles and make it a string
         clip_titles = list(set(clip_titles))
         clip_titles = '\n'.join(clip_titles)
@@ -65,18 +68,17 @@ class OpenAIUtils:
 
         # build the prompt
         prompt = f"\"{transcript}\"\n\"{clip_titles}\"\n\"{info}\"\
-                Above is the transcript and name of each clip from\
-                a set of clips from the twitch streamer\
+                Above is the name and transcript from\
+                one or more clips of the twitch streamer called\
                 {name}. There is also some info about the streamer. Use this info to complete the task.\n\
                 Make sure to include a title, description, and tags in the format:\
                 \"Title: your answer here\nDescription: your answer here\nTags: your \
                 answer here\" capitalization is important\
                 The description must be quite short just a small description of the video.\
-                The tags must be a comma separated list there should be 15 of them.\
-                Make sure to add '{name}' in the appropriate places!\
+                The tags must be a comma separated list.\
                 The title must be eye catching and idealy be a teaser for the content of the first clip.\
                 With that being said make sure the title is short and to the point and maximize click through rate\
-                and viewer utility."
+                and viewer retension."
         
         response = self.get_response(prompt, allow_reprompt=True)
 
