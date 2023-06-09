@@ -3,6 +3,7 @@
 
 from simple_youtube_api.Channel import Channel
 from simple_youtube_api.LocalVideo import LocalVideo
+from src.UserInput import get_bool
 
 class YoutubeUploader:
     def __init__(self, secretPath="googleConfig.json", credentialsPath="credentials.json"):
@@ -24,7 +25,7 @@ class YoutubeUploader:
 
         # set publish time
         if publishAt is not None:
-            video.set_publish_at(publishAt)
+            video.set_publish_at(publishAt.astimezone().isoformat())
 
         # setting status
         video.set_embeddable(True)
@@ -39,15 +40,20 @@ class YoutubeUploader:
             video.set_thumbnail_path(thumbnailPath)
 
         # uploading video and printing the results
-        input("Press enter to confirm upload (Ctrl+C to cancel) ...")
+        val = get_bool("Upload video? (y/n): ")
+        if not val:
+            print("aborting upload...")
+            return False
+        
 
         video = self.channel.upload_video(video)
         print(video.id)
         print(video)
 
         # liking video
-        video.like()   
+        video.like()
 
-
+        return True
+        
 if __name__ == "__main__":
     uploader = YoutubeUploader()
