@@ -186,7 +186,7 @@ class VideoMaker:
         youtube.upload(title, description, tags, "private", save_name, None)
 
         # add the video to the history
-        self.youtube_history.addVideo(self.clips, datetime.datetime.now())
+        self.uploaded_videos.addVideo(self.clips, datetime.datetime.now())
 
         return True
     
@@ -196,11 +196,10 @@ class VideoMaker:
         self.verify_clips_exist()
 
         youtube = YoutubeUploader()
-        streamer_name = self.clips[0].clip_dir.split('/')[-1].split('_')[0]
         text_times, transcriptions, titles, durations = self.get_clip_data()
 
         # get the time of the last uploaded video and schedule the video to be uploaded after that
-        video = self.youtube_history.getLatestVideo()
+        video = self.uploaded_videos.getLatestVideo()
         video_time = datetime.datetime.now()
         if video != None:
             video_time = video["upload_time"]
@@ -212,6 +211,8 @@ class VideoMaker:
             if durations[i] < REQUIRED_VIDEO_LENGTH:
                 print("Clip to short for standalone video skipping...")
                 continue
+            streamer_name = self.clips[i].clip_dir.split('/')[-1].split('_')[0]
+
             # add a fade in and out to the video
             video_clip = VideoFileClip(clip.clip_dir).fx(vfx.fadein, FADE_TIME).fx(vfx.fadeout, FADE_TIME)
             video_clip = video_clip.audio_fadeout(FADE_TIME)
@@ -235,10 +236,10 @@ class VideoMaker:
 
 
             # upload the video to youtube
-            youtube.upload(title, description, tags, "private", save_name, None, publishAt=video_time)
-            self.youtube_history.addVideo([clip], video_time)
-            video_time += datetime.timedelta(hours=6)
-
+            res = youtube.upload(title, description, tags, "private", save_name, None, publishAt=video_time)
+            if res:
+                self.uploaded_videos.addVideo([clip], video_time)
+                video_time += datetime.timedelta(hours=6)
 
 
     # returns the text data, transcriptions, titles, and durations of the clips
@@ -436,25 +437,6 @@ class VideoMaker:
 
         # get a yes or no from the user
         return get_bool("Is this clip good? (y/n):")
-
-    # sorts the clips
-    @staticmethod
-    def sort_clips(clips, key=lambda x: x.time, reverse=False):
-        clips.sort(key=key, reverse=reverse)
-
-        # if multiple clips have the same title then move those to the end of the list
-        rejects = []
-        for i in range(len(clips)):
-            for j in range(i + 1, len(clips)):
-                if clips[i].title == clips[j].title:
-                    rejects.append(clips[j])
-                    break
-
-        for reject in rejects:
-            clips.remove(reject)
-            clips.append(reject)
-
-        return clips
                 
     # makes a video from a directory of clips and uses the default transition and content for the channel 
     # specified by channel_name
@@ -470,14 +452,14 @@ class VideoMaker:
         users = authenticator.get_users_from_names([channel_name])
 
         if not users:
-            print("Could not find uPser " + channel_name)
+            print("Could not find user " + channel_name)
             return False
 
         clipGetter = ClipGetter()
 
         print("Getting clips for " + users[0].display_name)
 
-        clips = clipGetter.get_clips_recent(users[0], authenticator.get_client(), clip_dir=DEFAULT_CLIP_DIR, clip_count=clip_count, vods_back=vods_back)
+        clips = clipGetter.get_clips_from_stream(users[0], authenticator.get_client(), clip_dir=DEFAULT_CLIP_DIR, clip_count=clip_count, vods_back=vods_back)
 
         if len(clips) == 0:
             print("No clips found")
@@ -509,7 +491,7 @@ class VideoMaker:
 
         # sort all the clips
         if sort_by_time:
-            clips = VideoMaker.sort_clips(clips)
+            clips.sort(key=lambda x: x.time, reverse=True)
 
         # make sure the output dir exists
         if not os.path.exists(output_dir):
@@ -517,8 +499,6 @@ class VideoMaker:
 
         # now lets make the video
         video_maker = VideoMaker(clips, output_dir, transition_dir=transition_dir, authenticator=authenticator)
-        video_maker.verify_clips_exist()
-
         status = video_maker.make_video()
 
         if not status:
@@ -536,6 +516,49 @@ class VideoMaker:
 
     # makes many video's from the top few clips on each channel specified
     @staticmethod
-    async def make_from_top_clips(channel_names, num_videos):
-        # TODO implement this
-        pass
+    async def make_from_top_clips(channel_names, num_videos, days_back, output_dir=DEFAULT_OUTPUT_DIR):
+        if type(channel_names) != list:
+            raise Exception("channel_names must be a list")
+        
+        if len(channel_names) == 0:
+            raise Exception("channel_names must have at least one channel")
+        
+        if num_videos < len(channel_names):
+            raise Exception("num_videos must be greater than or equal to channel_names")
+
+        # init the twitch authenticator
+        authenticator = TwitchAuthenticator()
+
+        # authenticate the bot
+        await authenticator.authenticate()
+
+        # get user ids
+        users = authenticator.get_users_from_names(channel_names)
+
+        if len(users) != len(channel_names):
+            print("Could not find all users continuing with: ")
+            print([user.display_name for user in users])
+
+        # load the history
+        youtube_history = YoutubeHistory()
+
+        # get the clips
+        clips = []
+        clipGetter = ClipGetter()
+        for user in users:
+            print("Getting clips for " + user.display_name)
+            clip = clipGetter.get_popular_clips(user, authenticator.get_client(), youtube_history, days_back=days_back, clip_dir=DEFAULT_CLIP_DIR, clip_count=num_videos // len(users))
+            clips.extend(clip)
+
+        if len(clips) == 0:
+            print("No clips found")
+            return False
+        
+        # make the videos
+        video_maker = VideoMaker(clips, output_dir, authenticator=authenticator)
+        status = video_maker.make_videos_from_clips()
+
+        return status
+
+        
+
