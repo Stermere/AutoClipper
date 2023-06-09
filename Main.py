@@ -39,11 +39,16 @@ def main():
         asyncio.run(VideoMaker.make_from_channel(sys.argv[2], vods_back=vods_back))
 
     elif sys.argv[1] == '-mv':
-        if len(sys.argv) < 3:
-            print('Usage: python3 Main.py -mv streamer_name')
+        if len(sys.argv) < 5:
+            print('Usage: python3 Main.py -mv num_videos days_back streamer_names')
             exit(0)
-        print("UNIMPLEMENTED")
 
+        num_videos = int(sys.argv[2])
+        days_back = int(sys.argv[3])
+        streamer_names = sys.argv[4:]
+
+        asyncio.run(VideoMaker.make_from_top_clips(streamer_names, num_videos, days_back))
+        
     elif sys.argv[1] == '-c':
         # check for the second arg of the csv file specifying the clips
         if len(sys.argv) < 3 or  not sys.argv[2].endswith('.csv'):
