@@ -100,9 +100,6 @@ class ClipCompiler:
             # release any resources moviepy is using
             merged_clip.close()
 
-
-
-
         return clips
 
     # merges two clips together

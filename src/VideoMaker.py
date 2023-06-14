@@ -84,7 +84,9 @@ class VideoMaker:
         # now let the LLM choose the order of the clips
         print("Choosing order of clips...")
 
-        order = self.ml_models.get_video_order(titles, transcriptions, durations)
+        order = [0]
+        if len(self.clips) != 1:
+            order = self.ml_models.get_video_order(titles, transcriptions, durations)
 
         # ask the user if they want to override the LLM order
         self.clips, text_times, transcriptions, titles, durations, order = self.modify_clip_order(self.clips, text_times, transcriptions, titles, durations, order)
@@ -175,7 +177,7 @@ class VideoMaker:
             vod_links += f"clip {i+1}: {self.get_vod_link(clip)}\n"
 
 
-        title, description, tags = self.ml_models.get_video_info(streamer_name, "Transcripts: ".join(transcriptions[:TRANSCRIPTS_IN_PROMPT]), [clip.title for clip in self.clips])
+        title, description, tags = self.ml_models.get_video_info(streamer_name, "".join(transcriptions), [clip.title for clip in self.clips])
         description += vod_links
         print(f"\n\nTitle: {title}\nDescription: {description}\nTags: {tags}\n\n")
 
@@ -228,7 +230,7 @@ class VideoMaker:
 
             vod_link = self.get_vod_link(clip)
 
-            title, description, tags = self.ml_models.get_video_info(streamer_name, "Transcripts: ".join(transcriptions[i]), [self.clips[i].title])
+            title, description, tags = self.ml_models.get_video_info(streamer_name, "".join(transcriptions[i]), [self.clips[i].title])
             description += "Link to the vod: " + vod_link
             print(f"\n\nTitle: {title}\nDescription: {description}\nTags: {tags}\n\n")
 
@@ -251,11 +253,11 @@ class VideoMaker:
         durations = []
 
         # load the whisper model
+        print("Transcribing clips... (loading whisper model)")
         from src.WhisperInterface import WhisperInterface
         audio_to_text = WhisperInterface()
 
         # populate transcriptions and titles
-        print("Transcribing clips...")
         for clip in self.clips:
             # get the text and time stamps
             text_data = audio_to_text.transcribe_from_video(clip.clip_dir)
@@ -357,7 +359,7 @@ class VideoMaker:
         order_entered = False
         while True:
             # reorder the clips and text data
-            if order != None:
+            if order != None and len(order) == len(clips):
                 temp = list(zip(clips, text_times, transcriptions, titles, durations))
                 temp = [temp[i] for i in order]
                 clips, text_times, transcriptions, titles, durations = zip(*temp)
