@@ -37,8 +37,22 @@ class OpenAIUtils:
                 chats.append({"role": "user", "content": prompt})
 
             except openai.error.RateLimitError as e:
-                input("OpenAI be struggling. Press enter to try again.")
+                input("OpenAI be struggling. Press enter to try again. (wait a few minutes if this keeps happening!)")
         return completion.choices[0].message.content
+    
+    # given a prompt with {}'s in it fill them with the args passed in
+    def fill_prompt(self, prompt, *args):
+        # parse the prompt for the {}'s
+        args = list(args)
+        count = prompt.count('{}')
+        if count != len(args):
+            raise Exception("The number of args must match the number of {}'s in the prompt")
+
+        for i in range(count):
+            prompt = prompt.replace('{}', args[i], 1)
+
+        return prompt
+        
     
     # given a channel and the transcript of the clip return the video info
     def get_video_info(self, channel, transcript, clip_titles):
@@ -47,8 +61,7 @@ class OpenAIUtils:
 
         # remove duplicate titles and make it a string
         clip_titles = list(set(clip_titles))
-        clip_titles = '\n'.join(clip_titles)
-        clip_titles = "Titles:\n" + clip_titles
+        clip_titles = ''.join(clip_titles)
 
         # load the streamer info from the config file
         with open('creator_info.json') as f:
@@ -64,22 +77,13 @@ class OpenAIUtils:
         description = streamer_info["description"]
         catagory = streamer_info["catagory"]
 
-        info = f"Name: {name}\nCatagory:{catagory}\nDescription: {description}"
 
+        info = f"Name - {name}\nCatagory - {catagory}\nDescription - {description}"
         # build the prompt
-        prompt = f"\"{transcript}\"\n\"{clip_titles}\"\n\"{info}\"\
-                Above is the name and transcript from\
-                one or more clips of the twitch streamer called\
-                {name}. There is also some info about the streamer. Use this info to complete the task.\n\
-                Make sure to include a title, description, and tags in the format:\
-                \"Title: your answer here\nDescription: your answer here\nTags: your \
-                answer here\" capitalization is important\
-                The description must be quite short just a small description of the video.\
-                The tags must be a comma separated list.\
-                The title must be eye catching and idealy be a teaser for the content of the first clip.\
-                With that being said make sure the title is short and to the point and maximize click through rate\
-                and viewer retension."
-        
+        with open("src/prompts/GetVideoInfo.txt") as f:
+            prompt = f.readlines()
+        prompt = ''.join(prompt)
+        prompt = self.fill_prompt(prompt, transcript, clip_titles, info, name)
         response = self.get_response(prompt, allow_reprompt=True)
 
         # parse the response (this needs to be improved to handle the llm deciding to go off the rails)
@@ -91,7 +95,7 @@ class OpenAIUtils:
         tags = tags.split(', ')
 
         # add the postfix to the title
-        title += f" | {name} clips"
+        title += f" | {name} funny moments"
 
         # add a link to the description since the llm is not good at this TODO move this out of here
         promo = f"If you enjoyed this video please consider checking out {name}'s channels!\n\n"
@@ -101,26 +105,20 @@ class OpenAIUtils:
     
     # takes a list of clip titles and returns the order the LLM thinks they should be in
     # titles and transcripts must have the same number of items
-    def get_video_order(self, titles, transcripts, durations):
+    def get_video_order(self, titles_and_transcripts, transcripts, durations):
         # build a list of tuples where each is a title and transcript
-        clips = list(zip(titles, transcripts, durations))
+        clips = list(zip(titles_and_transcripts, transcripts, durations))
+        titles_and_transcripts = [f"Clip {i} - Title: {clip[0]} - Duration: {clip[2]} - Transcript: {clip[1]}\n" for i, clip in enumerate(clips)]
 
-        # TODO limit the number of clips (context length limit)
-        
         # build the prompt
-        titles = [f"Clip {i} - Title: {clip[0]} - Duration: {clip[2]} - Transcript: {clip[1][:200]}\n" for i, clip in enumerate(clips)]
-        prompt = "Above are the titles and transcripts of the clips.\
-                Your task is to order them from best to worst. Respond with a comma separated list of numbers enclosed by brackets like this [1, 2, 3].\
-                These are clips from a twitch streamer. You must order them to maximixe\
-                viwer retention as they will be edited together in the order you respond with.\
-                Make sure clips with the same ID are next to each other as often as possible.\
-                Maximize viewer utility."
+        with open("src/prompts/GetVideoOrder.txt") as f:
+            prompt = f.readlines()
+        prompt = "".join(prompt)
+        prompt = self.fill_prompt(prompt, "".join(titles_and_transcripts))
         
-        prompt += "".join(titles) + prompt
-
         response = self.get_response(prompt)
 
-        print(response)
+        print(response + "\n")
 
         if not "[" in response:
             print("ERROR: LLM did not respond with a list of numbers")

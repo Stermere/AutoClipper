@@ -1,0 +1,15 @@
+Clips Titles and Transcripts: {}
+
+Above are the titles and transcripts of the clips.
+Your task is to order them from best to worst. Respond with a comma separated list of numbers
+enclosed by brackets like this [0, 1, 2] for three items and like [0] for one item.
+These are clips from a twitch streamer. You must order them to maximixe
+viwer retention as they will be edited together in the order you respond with.
+Make sure clips with the same ID are next to each other as often as possible.
+Maximize viewer utility. The first clip should be the most interesting.
+A few more rules:
+1) The first clip should be the most interesting.
+2) short clips should be close to the end
+3) clips are hard to follow should be close to the end
+4) clips that have dark humor/adult jokes should be close to the front
+5) clips that are funny should be close to the front
