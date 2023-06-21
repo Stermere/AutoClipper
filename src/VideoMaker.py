@@ -468,7 +468,6 @@ class VideoMaker:
             return False
 
         print("\nClips downloaded...\n")
-        print(len(clips))
 
         # get user input 
         clip_count = get_int("How many clips would you like to use?", 1, len(clips))
