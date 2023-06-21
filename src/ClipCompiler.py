@@ -8,6 +8,7 @@ import datetime
 
 SIMILARITY_PERCENTAGE = 0.7
 
+# TODO fix this class its a mess
 class ClipCompiler:
     # given a csv file of clips cluster them into groups where clips overlap and merge them
     # takes a csv file or a list of clips and returns a list of clips that are not overlapping
@@ -52,17 +53,21 @@ class ClipCompiler:
 
             # if there is overlap but we could not merge delete the shorter clips or the first clip if they are the same length
             if (merged_clip == None):
-                print('Could not merge clips deleting shorter clip')
-                if clips_to_merge[0].duration > clips_to_merge[1].duration:
-                    clips.remove(clips_to_merge[1])
-                    os.remove(clips_to_merge[1].clip_dir)
-                elif clips_to_merge[0].duration < clips_to_merge[1].duration:
-                    clips.remove(clips_to_merge[0])
-                    os.remove(clips_to_merge[0].clip_dir)
-                else:
-                    clips.remove(clips_to_merge[0])
-                    os.remove(clips_to_merge[0].clip_dir)
-                continue
+                try:
+                    print('Could not merge clips deleting shorter clip')
+                    if clips_to_merge[0].duration > clips_to_merge[1].duration:
+                        clips.remove(clips_to_merge[1])
+                        os.remove(clips_to_merge[1].clip_dir)
+                    elif clips_to_merge[0].duration < clips_to_merge[1].duration:
+                        clips.remove(clips_to_merge[0])
+                        os.remove(clips_to_merge[0].clip_dir)
+                    else:
+                        clips.remove(clips_to_merge[0])
+                        os.remove(clips_to_merge[0].clip_dir)
+                    continue
+                except FileNotFoundError:
+                    print('Could not find file to delete')
+                    continue
 
             # generate the new clip name
             new_clip_name = clips_to_merge[0].clip_dir.split('_')[0] + '_' + datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S') + '.mp4'
