@@ -359,7 +359,7 @@ class VideoMaker:
         order_entered = False
         while True:
             # reorder the clips and text data
-            if order != None and len(order) == len(clips):
+            if order != None and len(order) <= len(clips):
                 temp = list(zip(clips, text_times, transcriptions, titles, durations))
                 temp = [temp[i] for i in order]
                 clips, text_times, transcriptions, titles, durations = zip(*temp)
@@ -468,9 +468,10 @@ class VideoMaker:
             return False
 
         print("\nClips downloaded...\n")
+        print(len(clips))
 
         # get user input 
-        clip_count = get_int("How many clips would you like to use? (Enter a number) ", 1, len(clips))
+        clip_count = get_int("How many clips would you like to use?", 1, len(clips))
         
         # delete any clips that are not in the top clip_count
         del_clips = clips[clip_count:]
