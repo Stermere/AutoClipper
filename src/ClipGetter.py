@@ -67,7 +67,10 @@ class ClipGetter:
         if not os.path.exists(clip_dir):
             os.makedirs(clip_dir, exist_ok=True)
 
-        print(f'Found {len(clips)} clips for {user.display_name}\'s stream ({video_id}) looking back to {start_time}')
+        print(f'Found {min(len(clips), clip_count)} clips for {user.display_name}\'s stream ({video_id}) looking back to {start_time}')
+
+        # print how long its been since the stream started
+        print(f'Time since stream ended: {(datetime.datetime.now().astimezone() - datetime.datetime.fromisoformat(start_time).astimezone()).total_seconds() / 60 / 60:.2f} hours')
 
         if len(clips) == 0:
             return []
@@ -81,8 +84,8 @@ class ClipGetter:
 
 
         # combine any overlapping clips
-        clip_compiler = ClipCompiler()
-        clips = clip_compiler.merge_clips(clips)
+        #clip_compiler = ClipCompiler()
+        #clips = clip_compiler.merge_clips(clips)
 
         # return the clips
         return clips
