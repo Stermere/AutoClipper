@@ -3,7 +3,7 @@
 def get_int(prompt, min, max):
     while True:
         try:
-            num = int(input(prompt))
+            num = int(input(prompt + f' ({min}-{max}): '))
             if num < min or num > max:
                 print(f'Please enter a number between {min} and {max}')
                 continue

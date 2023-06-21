@@ -22,7 +22,7 @@ class YoutubeHistory:
         
     def saveHistory(self):
         # only save entries newer than 1 month
-        self.history = [video for video in self.history if datetime.date.fromisoformat(video["upload_time"]) > datetime.date.today() - datetime.timedelta(days=30)]
+        self.history = [video for video in self.history if datetime.datetime.fromisoformat(video["upload_time"]) > datetime.date.today() - datetime.timedelta(days=30)]
         with open(YoutubeHistory.SAVE_PATH, 'w') as f:
             json.dump(self.history, f)
 
@@ -40,7 +40,7 @@ class YoutubeHistory:
     def getLatestVideo(self):
         if len(self.history) > 0:
             self.history[-1]
-            return [Clip.from_string(clip) for clip in self.history[-1]["clips"]], datetime.date.fromisoformat(self.history[-1]["upload_time"])
+            return [Clip.from_string(clip) for clip in self.history[-1]["clips"]], datetime.datetime.fromisoformat(self.history[-1]["upload_time"])
         else:
             return None
         
