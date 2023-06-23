@@ -230,7 +230,7 @@ class VideoMaker:
 
             vod_link = self.get_vod_link(clip)
 
-            title, description, tags = self.ml_models.get_video_info(streamer_name, "".join(transcriptions[i]), [self.clips[i].title])
+            title, description, tags = self.ml_models.get_video_info(streamer_name, "".join(transcriptions[i]), [self.clips[i].title], initial_prompt="src/prompts/GetSingleVideoInfo.txt")
             description += "Link to the vod: " + vod_link
             print(f"\n\nTitle: {title}\nDescription: {description}\nTags: {tags}\n\n")
 

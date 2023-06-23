@@ -29,7 +29,7 @@ class YoutubeHistory:
     def addVideo(self, relevant_clips, upload_time):
         if type(relevant_clips) != list or len(relevant_clips) == 0:
             Exception("relevant_clips must be a non-empty list")
-        if type(relevant_clips[1]) != Clip:
+        if type(relevant_clips[0]) != Clip:
             Exception("relevant_clips must be a list of Clip objects")
 
         relevant_clips = [clip.to_string() for clip in relevant_clips]
