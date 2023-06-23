@@ -55,7 +55,7 @@ class OpenAIUtils:
         
     
     # given a channel and the transcript of the clip return the video info
-    def get_video_info(self, channel, transcript, clip_titles):
+    def get_video_info(self, channel, transcript, clip_titles, initial_prompt="src/prompts/GetVideoInfo.txt"):
         if type(clip_titles) != list:
             raise Exception("clip_titles must be a list")
 
@@ -80,7 +80,7 @@ class OpenAIUtils:
 
         info = f"Name - {name}\nCatagory - {catagory}\nDescription - {description}"
         # build the prompt
-        with open("src/prompts/GetVideoInfo.txt") as f:
+        with open(initial_prompt) as f:
             prompt = f.readlines()
         prompt = ''.join(prompt)
         prompt = self.fill_prompt(prompt, transcript, clip_titles, info, name)
