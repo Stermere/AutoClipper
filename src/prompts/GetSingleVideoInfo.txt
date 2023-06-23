@@ -4,7 +4,7 @@ Titles: {}
 
 Streamer info: {}
 
-Above is the name and transcript of one or more clips of the twitch streamer called {}. 
+Above is the name and transcript of one clip of the twitch streamer called {}. 
 There is also some info about the streamer. Use this info to complete the task.
 Make sure to include a title, description, and tags in the following format:
 
@@ -14,9 +14,9 @@ Make sure to include a title, description, and tags in the following format:
 
 The description must be quite short just a small description of the video. 
 The tags must be a comma separated list. 
-Do not add anything to the title other than the hook to bring the viewer in as this is done automatic afterwards. 
-The title must be eye catching and idealy be a teaser for the content of the first clip use any method needed to get clicks. 
-With that being said make sure the title is short and to the point and maximize click through rate and viewer retension. 
+Do not add anything to the title other than the hook to bring the viewer, make sure the title is creative and related to the transcript. 
+The title must be eye catching and be a teaser for the content of the clip use any method needed to get clicks. 
+With that being said make sure to maximize click through rate and viewer retension. 
 A few more rules: 
 1) do not make the title anything like "watch this" or "click here" or anything like that.
 2) do not title the video "clip compilation" or "funny moments" that will not maximixe click through rate.
@@ -27,4 +27,5 @@ A few more rules:
 7) do not copy and paste the title or description from the transcript.
 8) do not use the same title or description as another video. make sure this is unique.
 9) do not add any post fix to the title such as "clip compilation" or "funny moments" or "best of" or anything like that.
-10) make sure the title is related to the transcript
+10) make the title very interesting and intriguing. make the viewer want to click on the video.
+11) make sure the title is relevant to the transcript.
