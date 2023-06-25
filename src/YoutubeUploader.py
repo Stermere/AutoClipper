@@ -14,8 +14,11 @@ class YoutubeUploader:
         # setting up the video that is going to be uploaded
         video = LocalVideo(file_path=videoPath)
 
-        # setting snippet
-        video.set_title(title)
+        # setting title, description, tags (truncate to 100 characters if needed)
+        if len(title) > 100:
+            title = title[:100]
+
+        video.set_title(title[:100])
         video.set_description(description)
         video.set_tags(tags)
 

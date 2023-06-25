@@ -27,3 +27,4 @@ A few more rules:
 7) do not copy and paste the title or description from the transcript.
 8) do not use the same title or description as another video. make sure this is unique.
 9) do not add any post fix to the title such as "clip compilation" or "funny moments" or "best of" or anything like that.
+10) make sure the title is related to the transcript
