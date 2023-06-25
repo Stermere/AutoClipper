@@ -105,16 +105,14 @@ class OpenAIUtils:
     
     # takes a list of clip titles and returns the order the LLM thinks they should be in
     # titles and transcripts must have the same number of items
-    def get_video_order(self, titles_and_transcripts, transcripts, durations):
-        # build a list of tuples where each is a title and transcript
-        clips = list(zip(titles_and_transcripts, transcripts, durations))
-        titles_and_transcripts = [f"Clip {i} - Title: {clip[0]} - Duration: {clip[2]} - Transcript: {clip[1]}\n" for i, clip in enumerate(clips)]
+    def get_video_order(self, clips):
+        clip_info = [f"Clip {i} - Title: {clip.title} - Duration: {clip.duration} - Transcript: {clip.transcript}\n" for i, clip in enumerate(clips)]
 
         # build the prompt
         with open("src/prompts/GetVideoOrder.txt") as f:
             prompt = f.readlines()
         prompt = "".join(prompt)
-        prompt = self.fill_prompt(prompt, "".join(titles_and_transcripts))
+        prompt = self.fill_prompt(prompt, "".join(clip_info))
         
         response = self.get_response(prompt)
 

@@ -79,27 +79,24 @@ class VideoMaker:
             self.cut_adjustment = 100
             print("cut adjustment active for: " + streamer_name)
 
-        text_times, transcriptions, titles, durations = self.get_clip_data()
+        # populate the clips transcript
+        self.get_clip_data()
 
         # now let the LLM choose the order of the clips
         print("Choosing order of clips...")
 
         order = [0]
         if len(self.clips) != 1:
-            order = self.ml_models.get_video_order(titles, transcriptions, durations)
+            order = self.ml_models.get_video_order(self.clips)
 
         # ask the user if they want to override the LLM order
-        self.clips, text_times, transcriptions, titles, durations, order = self.modify_clip_order(self.clips, text_times, transcriptions, titles, durations, order)
+        order = self.modify_clip_order(order)
 
         # build the video from the clips
         for i, clip in enumerate(self.clips):
-            # get the text data
-            text_data = text_times[i]
-
             # run the video through the filter to get the subclip we want
-            filter_result = self.filter_clip(clip, text_data)
-
-            # if None the clip was completely rejected
+            filter_result = self.filter_clip(clip, clip.text_times)
+            
             if filter_result == None:
                 continue
 
@@ -177,7 +174,7 @@ class VideoMaker:
             vod_links += f"clip {i+1}: {self.get_vod_link(clip)}\n"
 
 
-        title, description, tags = self.ml_models.get_video_info(streamer_name, "".join(transcriptions), [clip.title for clip in self.clips])
+        title, description, tags = self.ml_models.get_video_info(streamer_name, "".join([clip.transcript for clip in self.clips]), [clip.title for clip in self.clips])
         description += vod_links
         print(f"\n\nTitle: {title}\nDescription: {description}\nTags: {tags}\n\n")
 
@@ -198,7 +195,9 @@ class VideoMaker:
         self.verify_clips_exist()
 
         youtube = YoutubeUploader()
-        text_times, transcriptions, titles, durations = self.get_clip_data()
+
+        # populate the clips transcriptions and titles
+        self.get_clip_data()
 
         # get the time of the last uploaded video and schedule the video to be uploaded after that
         video = self.uploaded_videos.getLatestVideo()
@@ -210,7 +209,7 @@ class VideoMaker:
         video_time += datetime.timedelta(hours=6)
 
         for i, clip in enumerate(self.clips):
-            if durations[i] < REQUIRED_VIDEO_LENGTH:
+            if clip.duration < REQUIRED_VIDEO_LENGTH:
                 print("Clip to short for standalone video skipping...")
                 continue
             streamer_name = self.clips[i].clip_dir.split('/')[-1].split('_')[0]
@@ -230,7 +229,7 @@ class VideoMaker:
 
             vod_link = self.get_vod_link(clip)
 
-            title, description, tags = self.ml_models.get_video_info(streamer_name, "".join(transcriptions[i]), [self.clips[i].title])
+            title, description, tags = self.ml_models.get_video_info(streamer_name, clip.transcript, clip.title)
             description += "Link to the vod: " + vod_link
             print(f"\n\nTitle: {title}\nDescription: {description}\nTags: {tags}\n\n")
 
@@ -245,7 +244,7 @@ class VideoMaker:
 
 
     # returns the text data, transcriptions, titles, and durations of the clips
-    # this is used to make the LLM prompt
+    # also populates the clip objects with the text data and the transcriptions
     def get_clip_data(self):
         text_times = []
         transcriptions = []
@@ -272,6 +271,8 @@ class VideoMaker:
             for text in text_data:
                 clip_text += text["word"] + " "
             clip_text += "\n"
+
+            clip.set_transcription(text_data, clip_text)
 
             transcriptions.append(clip_text)
             titles.append(clip.title + " ID:" + clip.video_id)
@@ -355,18 +356,17 @@ class VideoMaker:
         return video_clip
     
     # allows the user to modify the order of the clips in the video
-    def modify_clip_order(self, clips, text_times, transcriptions, titles, durations, order=None):
+    def modify_clip_order(self, order=None):
         order_entered = False
         while True:
             # reorder the clips and text data
-            if order != None and len(order) <= len(clips):
-                temp = list(zip(clips, text_times, transcriptions, titles, durations))
-                temp = [temp[i] for i in order]
-                clips, text_times, transcriptions, titles, durations = zip(*temp)
+            if order != None and len(order) <= len(self.clips):
+                self.clips = [self.clips[i] for i in order]
 
-            for i, title in enumerate(titles):
-                print(f"Clip {i} {title} Duration: {clips[i].duration}")
-                print(transcriptions[i])
+
+            for i, clip in enumerate(self.clips):
+                print(f"Clip {i} {clip.title} Duration: {clip.duration}")
+                print(clip.transcription)
             print("\n")
 
             # if the LLM failed of the user wants to override the order
@@ -379,7 +379,7 @@ class VideoMaker:
                 try:
                     order = [int(i) for i in order]
                     for i in order:
-                        if i < 0 or i >= len(clips):
+                        if i < 0 or i >= len(self.clips):
                             raise ValueError
                     order_entered = True
                 except ValueError:
@@ -396,7 +396,7 @@ class VideoMaker:
             else:
                 break
 
-        return clips, text_times, transcriptions, titles, durations, order
+        return order
     
     # gets the vod link for the given clip
     def get_vod_link(self, clip):
@@ -549,7 +549,7 @@ class VideoMaker:
         clipGetter = ClipGetter()
         for user in users:
             print("Getting clips for " + user.display_name)
-            clip = clipGetter.get_popular_clips(user, authenticator.get_client(), youtube_history, days_back=days_back, clip_dir=DEFAULT_CLIP_DIR, clip_count=num_videos // len(users))
+            clip = clipGetter.get_popular_clips(user, authenticator.get_client(), youtube_history, days_back=days_back, clip_dir=DEFAULT_CLIP_DIR, clip_count=num_videos * 5 // len(users))
             clips.extend(clip)
 
         if len(clips) == 0:
