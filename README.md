@@ -1,5 +1,4 @@
 # AutoClipper
 
-# a bot that clips streamers and creates video compliations of them.
+# a bot that leverages GPT-3.5 to clip streamers and creates video compliations of them fully autonomously
 
-To get up and running your going to need to install whisperX, moviepy, twitchAPI, twitch, simple_youtube_api, and probably a few more I have not finished this readme
