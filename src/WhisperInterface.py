@@ -17,7 +17,7 @@ class WhisperInterface:
     # returns a touple with the first element being the word segments and the second being the no speech probability
     def transcription(self, audio_file):
         # transcribe with original whisper
-        result = self.model.transcribe(audio_file, batch_size=4)
+        result = self.model.transcribe(audio_file, batch_size=16)
 
         # load alignment model and metadata TODO fix language not being found all the time
         model_a, metadata = whisperx.load_align_model(language_code=DEFAULT_LANGUAGE, device=self.device)
