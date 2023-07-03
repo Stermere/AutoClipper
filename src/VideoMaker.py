@@ -5,7 +5,7 @@ from src.ClipGetter import ClipGetter
 from src.Clip import Clip
 from src.ClipCompiler import ClipCompiler
 from src.TwitchAuthenticator import TwitchAuthenticator
-from src.OpenAIUtils import OpenAIUtils
+from src.LanguageModel import LanguageModel
 from src.YoutubeUploader import YoutubeUploader
 from src.CutFinder import find_cut_point
 from src.UserInput import get_int, get_bool
@@ -19,36 +19,26 @@ with open('config.json') as f:
 TRANSITION_VOLUME = config['TRANSITION_VOLUME'] # volume of the transition clip
 TRANSITION_SUBCLIP = tuple(config['TRANSITION_SUBCLIP']) # the subclip of the transition clip to use
 OUTPUT_RESOLUTION = tuple(config['OUTPUT_RESOLUTION']) # the resolution of the output video
-SORT_BY_TIME = config['SORT_BY_TIME'] # if true the clips will be sorted by time if false they will be sorted by popularity
 DEFAULT_TRANSITION_DIR = config['DEFAULT_TRANSITION_DIR'] # the directory of the transition clip
 DEFAULT_OUTPUT_DIR = config['DEFAULT_OUTPUT_DIR'] # the directory to save the output video
 DEFAULT_CLIP_DIR = config['DEFAULT_CLIP_DIR'] # the directory to save the clips
-DEFAULT_CLIP_INFO_DIR = config['DEFAULT_CLIP_INFO_DIR'] # the directory to save the clip info
-DEFAULT_READY_CHANNEL_CSV = config['DEFAULT_READY_CHANNEL_CSV'] # the directory of the csv file with the channels that are ready to be compiled
 REQUIRED_VIDEO_LENGTH = config['REQUIRED_VIDEO_LENGTH'] # the required length of the video
 MAX_VIDEO_LENGTH = config['MAX_VIDEO_LENGTH'] # the maximum length of the video
-CLIP_CLUSTER_TIME = config['CLIP_CLUSTER_TIME'] # clips that are within this time of each other will be clustered together before being sorted by views
-LOOK_BACK_TIME = config['LOOK_BACK_TIME'] # the default time to fetch clips from
-REQUIRED_CLIP_NUM = config['REQUIRED_CLIP_NUM'] # the number of clips that are required to make a video
 TRANSITION_THRESHOLD = config['TRANSITION_THRESHOLD'] # the threshold time for when to add a transition
 EDGE_TRIM_TIME = config['EDGE_TRIM_TIME'] # the time to add to the start and end udderance of a clip
 START_TRIM_TIME = config['START_TRIM_TIME'] # the time to add to the start of the first word in a clip
 VIDEOS_TO_FETCH = config['VIDEOS_TO_FETCH'] # the number of videos to fetch from the api
 FADE_TIME = config['FADE_TIME'] # the time a fade in and out and the begining and end of a video will take
 TRANSITION_FADE_TIME = config['TRANSITION_FADE_TIME'] # the time a fade in and out will take for a transition
-SHORT_CLIP_IN_FRONT = config['SHORT_CLIP_IN_FRONT'] # the number of the short clips to add to the front of the video
 
 # these are likly not going to change so they are not in the config file
 MIN_CLIP_LENGTH = 10.0
-LENGTH_TO_TRIM_BACK =15.0
+LENGTH_TO_TRIM_BACK = 15.0
 LENGTH_TO_TRIM_FULL = 35.0
 TEMP_AUDIO_FILE = "temp/audio.wav"
-TALKING_THRESHOLD = 0.2 # the percentage of the clip that needs to be talking to be considered a talking clip
-TRANSCRIPTS_IN_PROMPT = 4 # the number of transcripts to add to the prompt
 
 
 class VideoMaker:
-    # TODO update the constructor to be better
     def __init__(self, clips, output_dir, intro_clip_dir=None, outro_clip_dir=None, transition_dir=None, authenticator=None):
         self.intro_clip_dir = intro_clip_dir
         self.outro_clip_dir = outro_clip_dir
@@ -59,7 +49,7 @@ class VideoMaker:
         self.uploaded_videos = YoutubeHistory()
 
         # used to get the title, description, and tags using a LLM and a more advanced transcription
-        self.ml_models = OpenAIUtils()
+        self.chat_llm = LanguageModel()
 
         # creator specific settings
         self.cut_adjustment = 0.0 # the amount of time to add to the cut point
@@ -82,12 +72,14 @@ class VideoMaker:
         # populate the clips transcript
         self.get_clip_data()
 
+        self.clips = self.chat_llm.filter_out_clips(self.clips, 5)
+
         # now let the LLM choose the order of the clips
         print("Choosing order of clips...")
 
         order = [0]
         if len(self.clips) != 1:
-            order = self.ml_models.get_video_order(self.clips)
+            order = self.chat_llm.get_video_order(self.clips)
 
         # ask the user if they want to override the LLM order
         order = self.modify_clip_order(order)
@@ -174,7 +166,7 @@ class VideoMaker:
             vod_links += f"clip {i+1}: {self.get_vod_link(clip)}\n"
 
 
-        title, description, tags = self.ml_models.get_video_info(streamer_name, "".join([clip.transcript for clip in self.clips]), [clip.title for clip in self.clips])
+        title, description, tags = self.chat_llm.get_video_info(streamer_name, "".join([clip.transcript for clip in self.clips]), [clip.title for clip in self.clips])
         description += vod_links
         print(f"\n\nTitle: {title}\nDescription: {description}\nTags: {tags}\n\n")
 
@@ -190,14 +182,12 @@ class VideoMaker:
         return True
     
     # makes many videos from the clips provided and uploads them to youtube as standalone videos
-    def make_videos_from_clips(self):
-        # check if all the clips have a valid clip dir
+    def make_videos_from_clips(self, num_videos):
         self.verify_clips_exist()
-
         youtube = YoutubeUploader()
-
-        # populate the clips transcriptions and titles
         self.get_clip_data()
+
+        self.clips = self.chat_llm.filter_out_clips(self.clips, num_videos)
 
         # get the time of the last uploaded video and schedule the video to be uploaded after that
         video = self.uploaded_videos.getLatestVideo()
@@ -229,7 +219,7 @@ class VideoMaker:
 
             vod_link = self.get_vod_link(clip)
 
-            title, description, tags = self.ml_models.get_video_info(streamer_name, clip.transcript, clip.title, initial_prompt="src/prompts/GetSingleVideoInfo.txt")
+            title, description, tags = self.chat_llm.get_video_info(streamer_name, clip.transcript, [clip.title], default_prompt="src/prompts/GetSingleVideoInfo.txt")
             description += "Link to the vod: " + vod_link
             print(f"\n\nTitle: {title}\nDescription: {description}\nTags: {tags}\n\n")
 
@@ -251,19 +241,30 @@ class VideoMaker:
         titles = []
         durations = []
 
+        # replace clips titles that are the same with a default title
+        dict_titles = {}
+        for clip in self.clips:
+            if clip.title in dict_titles:
+                dict_titles[clip.title] += 1
+            else:
+                dict_titles[clip.title] = 1
+        for clip in self.clips:
+            if dict_titles[clip.title] > 1:
+                clip.title = "No title provided"
+
         # load the whisper model
         print("Transcribing clips... (loading whisper model)")
         from src.WhisperInterface import WhisperInterface
         audio_to_text = WhisperInterface()
 
         # populate transcriptions and titles
+        temp_clips = []
         for clip in self.clips:
             # get the text and time stamps
             text_data = audio_to_text.transcribe_from_video(clip.clip_dir)
 
             if text_data == None:
                 print("Clip " + clip.clip_dir + " has problematic audio removing...")
-                self.clips.remove(clip)
                 continue
 
             # populate the transcription titles and text data
@@ -272,12 +273,19 @@ class VideoMaker:
                 clip_text += text["word"] + " "
             clip_text += "\n"
 
+            if clip_text == "\n":
+                print("Clip " + clip.clip_dir + " has problematic audio removing...")
+                continue
+
             clip.set_transcription(text_data, clip_text)
 
             transcriptions.append(clip_text)
-            titles.append(clip.title + " ID:" + clip.video_id)
+            titles.append(clip.title)
             text_times.append(text_data)
             durations.append(clip.duration)
+            temp_clips.append(clip)
+
+        self.clips = temp_clips
 
         return text_times, transcriptions, titles, durations
     
@@ -300,6 +308,8 @@ class VideoMaker:
         if clip_video == None:
             print("Clip to short after trimming rejecting...\n")
             return None
+        
+        print("Clip length after trim: " + str(clip_video.duration) + "\n")
 
         return clip_video
     
@@ -345,9 +355,6 @@ class VideoMaker:
         if (video_clip.duration < LENGTH_TO_TRIM_FULL or end_time - start_time < MIN_CLIP_LENGTH):
             start_time = 0
 
-        # print the duration of the clip
-        print("Clip duration after trim: " + str(end_time - start_time))
-
         # if the start and end times are to close then we reject the clip
         video_clip = video_clip.subclip(self.clamp(start_time, 0, video_clip.duration), self.clamp(end_time, 0, video_clip.duration))
         if (video_clip.duration < MIN_CLIP_LENGTH):
@@ -362,11 +369,9 @@ class VideoMaker:
             # reorder the clips and text data
             if order != None and len(order) <= len(self.clips):
                 self.clips = [self.clips[i] for i in order]
-
-
             for i, clip in enumerate(self.clips):
                 print(f"Clip {i} {clip.title} Duration: {clip.duration}")
-                print(clip.transcription)
+                print(clip.transcript)
             print("\n")
 
             # if the LLM failed of the user wants to override the order
@@ -443,7 +448,7 @@ class VideoMaker:
     # makes a video from a directory of clips and uses the default transition and content for the channel 
     # specified by channel_name
     @staticmethod
-    async def make_from_channel(channel_name, clip_count=VIDEOS_TO_FETCH, output_dir=DEFAULT_OUTPUT_DIR, transition_dir=DEFAULT_TRANSITION_DIR, sort_by_time=SORT_BY_TIME, vods_back=0):
+    async def make_from_channel(channel_name, clip_count=VIDEOS_TO_FETCH, output_dir=DEFAULT_OUTPUT_DIR, transition_dir=DEFAULT_TRANSITION_DIR, vods_back=0):
         # init the twitch authenticator
         authenticator = TwitchAuthenticator()
 
@@ -484,16 +489,12 @@ class VideoMaker:
         clips = clips[:clip_count]
 
         # have the user evaluate the clips
-        temp_clips = []
-        for clip in clips:
-            result = VideoMaker.human_eval_clip(clip)
-            if result:
-                temp_clips.append(clip)
-        clips = temp_clips
-
-        # sort all the clips
-        if sort_by_time:
-            clips.sort(key=lambda x: x.time, reverse=True)
+        #temp_clips = []
+        #for clip in clips:
+        #    result = VideoMaker.human_eval_clip(clip)
+        #    if result:
+        #        temp_clips.append(clip)
+        #clips = temp_clips
 
         # make sure the output dir exists
         if not os.path.exists(output_dir):
@@ -505,14 +506,6 @@ class VideoMaker:
 
         if not status:
             return False
-
-        # delete all clips in the clip dir
-        for clip in clips:
-            try:
-                if os.path.exists(clip.clip_dir):
-                    os.remove(clip.clip_dir)
-            except OSError:
-                print("Error while deleting file " + clip.clip_dir)
 
         return True
 
@@ -528,10 +521,7 @@ class VideoMaker:
         if num_videos < len(channel_names):
             raise Exception("num_videos must be greater than or equal to channel_names")
 
-        # init the twitch authenticator
         authenticator = TwitchAuthenticator()
-
-        # authenticate the bot
         await authenticator.authenticate()
 
         # get user ids
@@ -549,16 +539,20 @@ class VideoMaker:
         clipGetter = ClipGetter()
         for user in users:
             print("Getting clips for " + user.display_name)
-            clip = clipGetter.get_popular_clips(user, authenticator.get_client(), youtube_history, days_back=days_back, clip_dir=DEFAULT_CLIP_DIR, clip_count=num_videos * 5 // len(users))
+            clip = clipGetter.get_popular_clips(user, authenticator.get_client(), youtube_history, days_back=days_back, clip_dir=DEFAULT_CLIP_DIR, clip_count=num_videos * 3 // len(users))
             clips.extend(clip)
 
         if len(clips) == 0:
             print("No clips found")
             return False
         
+        if len(clips) < num_videos:
+            print("Not enough clips found")
+            return False
+        
         # make the videos
         video_maker = VideoMaker(clips, output_dir, authenticator=authenticator)
-        status = video_maker.make_videos_from_clips()
+        status = video_maker.make_videos_from_clips(num_videos)
 
         return status
 
