@@ -17,12 +17,12 @@ class LanguageModel:
         openai.api_key = api_key
 
     # given a prompt return the response
-    def get_response(self, prompt, allow_reprompt=False, max_tokens=300):
+    def get_response(self, prompt, allow_reprompt=False, max_tokens=300, model=DEFAULT_MODEL):
         # create the message list
         chats = [SYSTEM_MESSAGE, {"role": "user", "content": prompt}]
         while True:
             try:
-                completion = openai.ChatCompletion.create(model=DEFAULT_MODEL, messages=chats, max_tokens=max_tokens)
+                completion = openai.ChatCompletion.create(model=model, messages=chats, max_tokens=max_tokens)
                 if not allow_reprompt:
                     break
 
@@ -85,7 +85,7 @@ class LanguageModel:
             prompt = f.readlines()
         prompt = ''.join(prompt)
         prompt = self.fill_prompt(prompt, transcript, clip_titles, info, name)
-        response = self.get_response(prompt, allow_reprompt=True)
+        response = self.get_response(prompt, allow_reprompt=True, model="gpt-4")
 
         # parse the response (this needs to be improved to handle the llm deciding to go off the rails)
         title = response.split('Title: ')[-1]
@@ -149,15 +149,15 @@ class LanguageModel:
             prompt = f.readlines()
         prompt = ''.join(prompt)
         prompt = self.fill_prompt(prompt, ''.join(responses), str(num_returned))
-        response = self.get_response(prompt, max_tokens=600)
+        response = self.get_response(prompt, max_tokens=600, model="gpt-4")
 
         print(response + "\n")
 
         input("Press enter to continue...")
 
         # parse the response (note this could be bad if the user is allowed to reprompt)
-        response = response.split('[')[-1].split(']')[0]
-        output = eval(response)
+        response = response.split('(')[-1].split(')')[0]
+        output = list(eval(response))
 
         return [clips[int(i)] for i in output]
 
