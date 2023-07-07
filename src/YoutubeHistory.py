@@ -22,7 +22,7 @@ class YoutubeHistory:
         
     def saveHistory(self):
         # only save entries newer than 1 month
-        self.history = [video for video in self.history if datetime.datetime.fromisoformat(video["upload_time"]) > datetime.date.today() - datetime.timedelta(days=30)]
+        self.history = [video for video in self.history if datetime.datetime.fromisoformat(video["upload_time"]) > datetime.datetime.today() - datetime.timedelta(days=30)]
         with open(YoutubeHistory.SAVE_PATH, 'w') as f:
             json.dump(self.history, f)
 
