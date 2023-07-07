@@ -13,3 +13,4 @@ A few more rules:
 3) clips are hard to follow should be close to the end
 4) clips that have dark humor/adult jokes should be close to the front
 5) clips that are funny should be close to the front
+6) always give reasoning before the order of the clips

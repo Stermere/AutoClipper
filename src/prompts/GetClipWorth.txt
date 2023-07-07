@@ -13,3 +13,4 @@ Rules:
 4) You should be very detailed yet concise in your reasoning.
 5) Do not come to a conclusion without considering all the information.
 6) the clip Transcript being similar to a song lyric is a reason to reject the clip.
+7) make sure to quote the transcript in entire sentences do not remove context.

@@ -21,8 +21,8 @@ A few more rules:
 1) do not make the title anything like "watch this" or "click here" or anything like that.
 2) do not title the video "clip compilation" or "funny moments" that will not maximixe click through rate.
 3) do not lie in the title or description.
-4) do not use clickbait. the title must be relevant to the content of the video.
-5) you may use emojis when appropriate.
+4) do not use clickbait. the title must be relevant to the content of the video. 
+5) make the title related to something that occured in the transcript do not speculate.
 6) do not use names provided in the transcript as they are not always accurate and may be misspelled.
 7) do not copy and paste the title or description from the transcript.
 8) do not use the same title or description as another video. make sure this is unique.
