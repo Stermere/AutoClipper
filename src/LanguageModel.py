@@ -149,7 +149,7 @@ class LanguageModel:
             prompt = f.readlines()
         prompt = ''.join(prompt)
         prompt = self.fill_prompt(prompt, ''.join(responses), str(num_returned))
-        response = self.get_response(prompt, max_tokens=600, model="gpt-4")
+        response = self.get_response(prompt, max_tokens=600)
 
         print(response + "\n")
 
