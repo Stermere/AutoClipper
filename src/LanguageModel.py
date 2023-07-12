@@ -143,7 +143,7 @@ class LanguageModel:
             print(r + "\n") 
 
         # convert the responses to a string with the clip numbers
-        responses = [f"Clip {i} - {responses[i]}\n\n" for i in range(len(responses))]
+        responses = [f"Clip {i} - {responses[i]} - Transcript: {clips[i].transcript} \n\n" for i in range(len(responses))]
 
         with open("src/prompts/FilterClips.txt") as f:
             prompt = f.readlines()
