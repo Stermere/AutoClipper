@@ -143,13 +143,13 @@ class LanguageModel:
             print(r + "\n") 
 
         # convert the responses to a string with the clip numbers
-        responses = [f"Clip {i} - {responses[i]} - Transcript: {clips[i].transcript} \n\n" for i in range(len(responses))]
+        responses = [f"Clip {i} - {responses[i].replace('(', '').replace(')', '')} - Transcript: {clips[i].transcript} \n\n" for i in range(len(responses))]
 
         with open("src/prompts/FilterClips.txt") as f:
             prompt = f.readlines()
         prompt = ''.join(prompt)
         prompt = self.fill_prompt(prompt, ''.join(responses), str(num_returned))
-        response = self.get_response(prompt, max_tokens=600)
+        response = self.get_response(prompt, max_tokens=600, model="gpt-3.5-turbo-16k")
 
         print(response + "\n")
 
