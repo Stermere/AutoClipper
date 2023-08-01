@@ -85,7 +85,7 @@ class LanguageModel:
             prompt = f.readlines()
         prompt = ''.join(prompt)
         prompt = self.fill_prompt(prompt, transcript, clip_titles, info, name)
-        response = self.get_response(prompt, allow_reprompt=True, model="gpt-4")
+        response = self.get_response(prompt, allow_reprompt=True)
 
         # parse the response (this needs to be improved to handle the llm deciding to go off the rails)
         title = response.split('Title: ')[-1]
