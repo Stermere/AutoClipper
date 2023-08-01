@@ -40,16 +40,13 @@ def main():
         
     # delete all clips in the clip directory
     elif sys.argv[1] == '-clean':
-        for i in range(5, 0, -1):
-            print('Cleaning up in {} seconds'.format(i))
-            time.sleep(1)
         clips = os.listdir(DEFAULT_CLIP_DIR)
-
         for clip in clips:
             os.remove(os.path.join(DEFAULT_CLIP_DIR, clip))
 
     # register with the youtube api
     elif sys.argv[1] == '-r':
+        os.remove('credentials.json')
         sys.argv = sys.argv[:0]
         uploader = YoutubeUploader()
 
