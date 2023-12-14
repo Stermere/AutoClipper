@@ -2,4 +2,4 @@ chat_data/
 clip_info/
 src/__pycache__/
 temp/
-video_assets/
+config.json
