@@ -57,13 +57,13 @@ class Clip:
     @staticmethod
     def from_twitch_api_clip(clip, clip_dir):
         return Clip(clip_dir,
-                    clip['id'],
-                    clip['broadcaster_id'],
-                    clip['game_id'],
-                    clip['broadcaster_name'],
-                    datetime.datetime.fromisoformat(str(clip['created_at'])),
-                    clip['duration'],
-                    clip['view_count'], 
-                    clip['title'], 
-                    clip['vod_offset'], 
-                    clip['video_id'])
+                    clip.id,
+                    clip.broadcaster_id,
+                    clip.game_id,
+                    clip.broadcaster_name,
+                    datetime.datetime.fromisoformat(str(clip.created_at)),
+                    clip.duration,
+                    clip.view_count, 
+                    clip.title, 
+                    clip.vod_offset, 
+                    clip.video_id)

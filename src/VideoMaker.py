@@ -5,7 +5,7 @@ from src.ClipGetter import ClipGetter
 from src.Clip import Clip
 from src.ClipCompiler import ClipCompiler
 from src.TwitchAuthenticator import TwitchAuthenticator
-from src.LanguageModel import LanguageModel
+from src.LanguageModelHandler import LanguageModelHandler
 from src.YoutubeUploader import YoutubeUploader
 from src.CutFinder import find_cut_point
 from src.UserInput import get_int, get_bool
@@ -55,7 +55,7 @@ class VideoMaker:
         self.uploaded_videos = YoutubeHistory()
 
         # used to get the title, description, and tags using a LLM and a more advanced transcription
-        self.chat_llm = LanguageModel()
+        self.chat_llm = LanguageModelHandler()
 
         # creator specific settings
         self.cut_adjustment = 0.0 # the amount of time to add to the cut point
@@ -475,7 +475,7 @@ class VideoMaker:
 
         print("Getting clips for " + users[0].display_name)
 
-        clips = clipGetter.get_clips_from_stream(users[0], authenticator.get_client(), clip_dir=Config().getValue("DEFAULT_CLIP_DIR"), clip_count=clip_count, vods_back=vods_back)
+        clips = await clipGetter.get_clips_from_stream(users[0], authenticator, clip_dir=Config().getValue("DEFAULT_CLIP_DIR"), clip_count=clip_count, vods_back=vods_back)
 
         if len(clips) == 0:
             print("No clips found")

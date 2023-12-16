@@ -3,11 +3,12 @@ import openai
 import json
 import time
 from src.Config import Config
+from src.LlamaWrapper import LlamaWrapper
 
 # define the system message
 SYSTEM_MESSAGE = {"role": "system", "content": "You are a Youtube video editor assistant. You must complete the task layed out by your user."}
 
-class LanguageModel:
+class LanguageModelHandler:
     def __init__(self):
         self.config = Config()
         openai.api_key = self.config.getValue("OPENAI_API_KEY")
@@ -18,6 +19,9 @@ class LanguageModel:
             print("WARNING: No language models are enabled. Please enable one in the config file.")
             quit(1)
 
+        if self.use_llama2:
+            self.llama2 = LlamaWrapper()
+
     # given a prompt return the response
     def get_response(self, prompt, allow_reprompt=False, max_tokens=300, model=Config().getValue("DEFAULT_MODEL")):
         # create the message list
@@ -26,14 +30,15 @@ class LanguageModel:
             try:
                 if self.use_openai:
                     completion = openai.ChatCompletion.create(model=model, messages=chats, max_tokens=max_tokens)
+                    completion = completion.choices[0].message.content
                 elif self.use_llama2:
-                    pass
-
+                    prompt = ''.join([f"{chat['role']}: {chat['content']}\n" for chat in chats])
+                    completion = self.llama2.generate(prompt, max_length=max_tokens)
 
                 if not allow_reprompt:
                     break
 
-                chats.append({"role": "assistant", "content": completion.choices[0].message.content})
+                chats.append({"role": "assistant", "content": completion})
 
                 print(completion.choices[0].message.content + "\n")
 
@@ -178,7 +183,7 @@ class LanguageModel:
 
 
 if __name__ == "__main__":
-    openai_utils = LanguageModel()
+    openai_utils = LanguageModelHandler()
 
 
         

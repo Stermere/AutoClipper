@@ -1,9 +1,10 @@
 # a class that handles authentication with the twitch api
 
 import twitch 
-from twitchAPI import Twitch
+from twitchAPI.twitch import Twitch
 from twitchAPI.oauth import UserAuthenticator
-from twitchAPI.types import AuthScope
+from twitchAPI.type import AuthScope
+from twitchAPI.helper import limit
 from src.Config import Config
 
 class TwitchAuthenticator:
@@ -30,7 +31,7 @@ class TwitchAuthenticator:
         await self.twitch.set_user_authentication(self.token, TwitchAuthenticator.USER_SCOPE, self.refresh_token)
 
         # create helix instance to get user id
-        self.client = twitch.TwitchHelix(client_id=TwitchAuthenticator.APP_ID, oauth_token=self.token)
+        self.client = twitch.Helix(client_id=TwitchAuthenticator.APP_ID, client_secret=TwitchAuthenticator.APP_SECRET, bearer_token=self.token)
 
         # set up the refresh callbacks
         self.twitch.app_auth_refresh_callback = self.app_refresh
@@ -40,7 +41,7 @@ class TwitchAuthenticator:
         self.token = token
         self.refresh_token = refresh_token
         await self.twitch.set_user_authentication(self.token, TwitchAuthenticator.USER_SCOPE, self.refresh_token)
-        self.client = twitch.TwitchHelix(client_id=TwitchAuthenticator.APP_ID, oauth_token=self.token)
+        self.client = twitch.Helix(client_id=TwitchAuthenticator.APP_ID, bearer_token=self.token)
 
         print(f'New user token: {token}')
 
@@ -54,12 +55,12 @@ class TwitchAuthenticator:
 
     def get_users_from_names(self, usernames):
         # get the user id from the username
-        user = self.client.get_users(login_names=usernames)
+        user = self.client.users(usernames)
         return user
     
     def get_users_from_ids(self, user_ids):
         # get the username from the user id
-        user = self.client.get_users(ids=user_ids)
+        user = self.client.users(user_ids)
         return user
     
     def get_streams(self, user_ids):
@@ -68,10 +69,21 @@ class TwitchAuthenticator:
         return streams
     
     def get_videos_from_ids(self, video_ids):
-        # get the stream title from the video id
-        videos = self.client.get_videos(video_ids=video_ids)
+        videos = self.client.videos(user_ids=video_ids)
         return videos
-
+    
+    async def get_clips(self, user_id, started_at=None, ended_at=None):    
+        # get the clips for the user
+        # clips is AsyncGenerator[Clip, None]:
+        clips = self.twitch.get_clips(broadcaster_id=user_id, started_at=started_at, ended_at=ended_at)\
+            
+        # convert the AsyncGenerator to a list
+        clip_list = []
+        async for clip in limit(clips, Config().getValue('VIDEOS_TO_FETCH')):
+            clip_list.append(clip)
+        
+        return clip_list
+    
     def get_token(self):
         return self.token
     
