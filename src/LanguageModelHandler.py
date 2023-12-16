@@ -15,7 +15,7 @@ class LanguageModelHandler:
         self.use_openai = self.config.getValue("USE_OPENAI")
         self.use_llama2 = self.config.getValue("USE_LLAMA2")
 
-        if not self.use_llama2 or not self.use_openai:
+        if not (self.use_llama2 or self.use_openai):
             print("WARNING: No language models are enabled. Please enable one in the config file.")
             quit(1)
 
