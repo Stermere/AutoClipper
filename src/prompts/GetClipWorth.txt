@@ -3,15 +3,11 @@ Clip Transcript: {}
 
 Above is the information for a clip of a twitch streamer. Your task is to outline a few reasons this clip is worth 
 watching. You can use the information above to help you decide. Make sure to consider what could 
-be happening in the clip and what the streamer is saying. Please give a detailed explanation for your
-resoning behind your decision and list the reasons this clip is worth watching or not.
+be happening in the clip and what the streamer is saying. Please give a explanation shorter that 4 sentences for your
+resoning behind your decision. also include a number from 1-10 for how much you want to watch the clip. 1 being not at all
 
 Rules:
-1) You can only use the information above to make your decision.
-2) Never disrespect the streamer.
-3) Never regect a clip for being hard to understand you must make infrences even if the transcription is bad or inacurate.
-4) You should be very detailed yet concise in your reasoning.
-5) Do not come to a conclusion without considering all the information.
-6) the clip Transcript being similar to a song lyric is a reason to reject the clip.
-7) make sure to quote the transcript in entire sentences do not remove context.
-8) longer clips that have more context are better than shorter clips. i.e. a paragraph is better than a sentence.
+1) Never regect a clip for being hard to understand you must make infrences even if the transcription is bad or inacurate.
+2) Do not come to a conclusion without considering all the information.
+3) Do your best!
+

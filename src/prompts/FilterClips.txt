@@ -5,16 +5,15 @@ Below is a description and some reasoning for why each clip should be choosen fo
 
 Your task is to choose the best {} or more clips from the list above and write a short description of why 
 each clip was chosen over the others. Make sure to choose clips that will keep a viewer engaged.
-Once you have chosen your clips you should format your choices into a list. Each. For example:
-
-(0, 5, 8)
-
+Once you have chosen your clips you should format your choices into a list. Here is an example: [0, 1]
 This is just an example, you should choose the clips you think are best
 here are some rules for choosing clips:
+
+
 1) choose the clip that will keep the viewer engaged, clips with alot of action are good
-2) choose clips that are going to be funny out of context (if possible)
-3) make sure the reasoning for choosing the clip is clear and concise if not do not choose the clip
-4) do not choose boring clips (if you are bored reading it the viewer will be bored watching it)
-5) longer clips are better than shorter clips (if possible)
-6) do not choose clips that seem to be singing any song (this is a legal issue) 
+6) do not choose clips that seem to be singing any song
 7) finally use your best judgement and make sure to be thoughtful in your choices
+
+Good luck and have fun! remember the clips to choose from are:
+
+{}
