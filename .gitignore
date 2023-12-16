@@ -3,3 +3,5 @@ clip_info/
 src/__pycache__/
 temp/
 config.json
+llama
+*venv
