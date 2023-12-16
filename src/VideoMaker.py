@@ -10,36 +10,42 @@ from src.YoutubeUploader import YoutubeUploader
 from src.CutFinder import find_cut_point
 from src.UserInput import get_int, get_bool
 from src.YoutubeHistory import YoutubeHistory
+from src.Config import Config
 import datetime
 import json
 
 with open('config.json') as f:
     config = json.load(f)
 
-TRANSITION_VOLUME = config['TRANSITION_VOLUME'] # volume of the transition clip
-TRANSITION_SUBCLIP = tuple(config['TRANSITION_SUBCLIP']) # the subclip of the transition clip to use
-OUTPUT_RESOLUTION = tuple(config['OUTPUT_RESOLUTION']) # the resolution of the output video
-DEFAULT_TRANSITION_DIR = config['DEFAULT_TRANSITION_DIR'] # the directory of the transition clip
-DEFAULT_OUTPUT_DIR = config['DEFAULT_OUTPUT_DIR'] # the directory to save the output video
-DEFAULT_CLIP_DIR = config['DEFAULT_CLIP_DIR'] # the directory to save the clips
-REQUIRED_VIDEO_LENGTH = config['REQUIRED_VIDEO_LENGTH'] # the required length of the video
-MAX_VIDEO_LENGTH = config['MAX_VIDEO_LENGTH'] # the maximum length of the video
-TRANSITION_THRESHOLD = config['TRANSITION_THRESHOLD'] # the threshold time for when to add a transition
-EDGE_TRIM_TIME = config['EDGE_TRIM_TIME'] # the time to add to the start and end udderance of a clip
-START_TRIM_TIME = config['START_TRIM_TIME'] # the time to add to the start of the first word in a clip
-VIDEOS_TO_FETCH = config['VIDEOS_TO_FETCH'] # the number of videos to fetch from the api
-FADE_TIME = config['FADE_TIME'] # the time a fade in and out and the begining and end of a video will take
-TRANSITION_FADE_TIME = config['TRANSITION_FADE_TIME'] # the time a fade in and out will take for a transition
+"""
+TRANSITION_VOLUME volume of the transition clip
+TRANSITION_SUBCLIP the subclip of the transition clip to use
+OUTPUT_RESOLUTION the resolution of the output video
+DEFAULT_TRANSITION_DIR the directory of the transition clip
+DEFAULT_OUTPUT_DIR the directory to save the output video
+DEFAULT_CLIP_DIR the directory to save the clips
+REQUIRED_VIDEO_LENGTH the required length of the video
+MAX_VIDEO_LENGTH the maximum length of the video
+TRANSITION_THRESHOLD the threshold time for when to add a transition
+EDGE_TRIM_TIME the time to add to the start and end udderance of a clip
+START_TRIM_TIME the time to add to the start of the first word in a clip
+VIDEOS_TO_FETCH the number of videos to fetch from the api
+FADE_TIME the time a fade in and out and the begining and end of a video will take
+TRANSITION_FADE_TIME the time a fade in and out will take for a transition
+TARGET_CLIP_AMOUNT the number of clips to use in the video
+"""
 
 # these are likly not going to change so they are not in the config file
 MIN_CLIP_LENGTH = 10.0
 LENGTH_TO_TRIM_BACK = 15.0
-LENGTH_TO_TRIM_FULL = 35.0
+LENGTH_TO_TRIM_FULL = 50.0
 TEMP_AUDIO_FILE = "temp/audio.wav"
 
 
 class VideoMaker:
     def __init__(self, clips, output_dir, intro_clip_dir=None, outro_clip_dir=None, transition_dir=None, authenticator=None):
+        self.config = Config()
+        
         self.intro_clip_dir = intro_clip_dir
         self.outro_clip_dir = outro_clip_dir
         self.clips = clips
@@ -64,15 +70,15 @@ class VideoMaker:
         added_transition = False
         streamer_name = self.clips[0].clip_dir.split('/')[-1].split('_')[0]
 
-        # certain creators specifically the ai streamers should not cut at the moment of silence
-        if streamer_name.lower() in config["NO_CUT_STREAMERS"]:
+        # certain creators specifically the ai streamers should not be cut at the moment of silence because it is part of the content
+        if streamer_name.lower() in self.config.getValue("NO_CUT_STREAMERS"):
             self.cut_adjustment = 100
             print("cut adjustment active for: " + streamer_name)
 
         # populate the clips transcript
         self.get_clip_data()
 
-        self.clips = self.chat_llm.filter_out_clips(self.clips, 5)
+        self.clips = self.chat_llm.filter_out_clips(self.clips, self.config.getValue("TARGET_CLIP_AMOUNT"))
 
         # now let the LLM choose the order of the clips
         print("Choosing order of clips...")
@@ -93,8 +99,8 @@ class VideoMaker:
                 continue
 
             # add a sound fade in and out to the clip
-            filter_result = filter_result.fx(vfx.fadein, TRANSITION_FADE_TIME)
-            filter_result = filter_result.audio_fadeout(TRANSITION_FADE_TIME)
+            filter_result = filter_result.fx(vfx.fadein, self.config.getValue("TRANSITION_FADE_TIME"))
+            filter_result = filter_result.audio_fadeout(self.config.getValue("TRANSITION_FADE_TIME"))
 
             # add the clip to the list of clips
             videos.append(filter_result)
@@ -103,18 +109,18 @@ class VideoMaker:
             added_transition = False
 
             # if the resulting video is longer than the max length then stop
-            if (sum([video.duration for video in videos]) > MAX_VIDEO_LENGTH):
+            if (sum([video.duration for video in videos]) > self.config.getValue("MAX_VIDEO_LENGTH")):
                 break
 
             # if the two clips are close together do not add a transition
             if (i != len(self.clips) - 1 and clip.video_id == self.clips[i + 1].video_id):
                 if (self.clips[i + 1].vod_offset == None or clip.vod_offset == None):
                     pass
-                elif (self.clips[i + 1].vod_offset - clip.vod_offset < TRANSITION_THRESHOLD and self.clips[i + 1].vod_offset - clip.vod_offset > 0.0):
+                elif (self.clips[i + 1].vod_offset - clip.vod_offset < self.config.getValue("TRANSITION_THRESHOLD") and self.clips[i + 1].vod_offset - clip.vod_offset > 0.0):
                     continue
             
             added_transition = True
-            videos.append(VideoFileClip(self.transition_dir).volumex(TRANSITION_VOLUME).subclip(TRANSITION_SUBCLIP[0], TRANSITION_SUBCLIP[1]))
+            videos.append(VideoFileClip(self.transition_dir).volumex(self.config.getValue("TRANSITION_VOLUME")).subclip(*self.config.getValue("TRANSITION_SUBCLIP")))
 
         # if we added a transition at the end remove it
         if added_transition:
@@ -132,7 +138,7 @@ class VideoMaker:
 
         # resize all videos to 1080p
         for i in range(len(videos)):
-            videos[i] = videos[i].resize(OUTPUT_RESOLUTION)
+            videos[i] = videos[i].resize(self.config.getValue("OUTPUT_RESOLUTION"))
 
         # get the combined video
         if (len(videos) == 0):
@@ -142,15 +148,15 @@ class VideoMaker:
         final_clip = concatenate_videoclips(videos, method="compose")
     
         # check the length of the video
-        if (final_clip.duration < REQUIRED_VIDEO_LENGTH):
+        if (final_clip.duration < self.config.getValue("REQUIRED_VIDEO_LENGTH")):
             print("The video is only " + str(final_clip.duration) + " seconds long aborting...")
             return False
         
         # add a fade in and out to the video
-        final_clip = final_clip.fx(vfx.fadein, FADE_TIME).fx(vfx.fadeout, FADE_TIME)
+        final_clip = final_clip.fx(vfx.fadein, self.config.getValue("FADE_TIME")).fx(vfx.fadeout, self.config.getValue("FADE_TIME"))
 
         # make the audio also fade out
-        final_clip = final_clip.audio_fadeout(FADE_TIME)
+        final_clip = final_clip.audio_fadeout(self.config.getValue("FADE_TIME"))
 
         # get the save name
         save_name = self.output_dir + streamer_name + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + '.mp4'
@@ -199,14 +205,14 @@ class VideoMaker:
         video_time += datetime.timedelta(hours=6)
 
         for i, clip in enumerate(self.clips):
-            if clip.duration < REQUIRED_VIDEO_LENGTH:
+            if clip.duration < self.config.getValue("REQUIRED_VIDEO_LENGTH"):
                 print("Clip to short for standalone video skipping...")
                 continue
             streamer_name = self.clips[i].clip_dir.split('/')[-1].split('_')[0]
 
             # add a fade in and out to the video
-            video_clip = VideoFileClip(clip.clip_dir).fx(vfx.fadein, FADE_TIME).fx(vfx.fadeout, FADE_TIME)
-            video_clip = video_clip.audio_fadeout(FADE_TIME)
+            video_clip = VideoFileClip(clip.clip_dir).fx(vfx.fadein, self.config.getValue("FADE_TIME")).fx(vfx.fadeout, self.config.getValue("FADE_TIME"))
+            video_clip = video_clip.audio_fadeout(self.config.getValue("FADE_TIME"))
 
             # get the save name
             save_name = self.output_dir + streamer_name + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + '.mp4'
@@ -333,7 +339,7 @@ class VideoMaker:
             return None
         
         # start the clip a little before the first word
-        start_time = text_times[0]["start"] - START_TRIM_TIME
+        start_time = text_times[0]["start"] - self.config.getValue("START_TRIM_TIME")
         end_time = video_clip.duration
         
         # only search the last 1/3 of the clip for the end time (sometimes the transcript forgets to add a period at the end)
@@ -342,7 +348,7 @@ class VideoMaker:
             # find the last word with a period and use that as the end time
             word = text_times[i]["word"]
             if "." in word or "?" in word or "!" in word:
-                end_time = text_times[i]["end"] + EDGE_TRIM_TIME
+                end_time = text_times[i]["end"] + self.config.getValue("EDGE_TRIM_TIME")
                 break
         
         # add the cut_adjustment to the end time
@@ -448,7 +454,10 @@ class VideoMaker:
     # makes a video from a directory of clips and uses the default transition and content for the channel 
     # specified by channel_name
     @staticmethod
-    async def make_from_channel(channel_name, clip_count=VIDEOS_TO_FETCH, output_dir=DEFAULT_OUTPUT_DIR, transition_dir=DEFAULT_TRANSITION_DIR, vods_back=0):
+    async def make_from_channel(channel_name, clip_count=Config().getValue("VIDEOS_TO_FETCH"),
+                                output_dir=Config().getValue("DEFAULT_OUTPUT_DIR"),
+                                transition_dir=Config().getValue("DEFAULT_TRANSITION_DIR"),
+                                vods_back=0):
         # init the twitch authenticator
         authenticator = TwitchAuthenticator()
 
@@ -466,7 +475,7 @@ class VideoMaker:
 
         print("Getting clips for " + users[0].display_name)
 
-        clips = clipGetter.get_clips_from_stream(users[0], authenticator.get_client(), clip_dir=DEFAULT_CLIP_DIR, clip_count=clip_count, vods_back=vods_back)
+        clips = clipGetter.get_clips_from_stream(users[0], authenticator.get_client(), clip_dir=Config().getValue("DEFAULT_CLIP_DIR"), clip_count=clip_count, vods_back=vods_back)
 
         if len(clips) == 0:
             print("No clips found")
@@ -476,18 +485,8 @@ class VideoMaker:
 
         # get user input 
         clip_count = get_int("How many clips would you like to use?", 1, len(clips))
-        
-        # delete any clips that are not in the top clip_count
-        del_clips = clips[clip_count:]
-        for clip in del_clips:
-            try:
-                if os.path.exists(clip.clip_dir):
-                    os.remove(clip.clip_dir)
-            except OSError:
-                print("Error while deleting file " + clip.clip_dir)
-
         clips = clips[:clip_count]
-
+        
         # have the user evaluate the clips
         #temp_clips = []
         #for clip in clips:
@@ -511,7 +510,7 @@ class VideoMaker:
 
     # makes many video's from the top few clips on each channel specified
     @staticmethod
-    async def make_from_top_clips(channel_names, num_videos, days_back, output_dir=DEFAULT_OUTPUT_DIR):
+    async def make_from_top_clips(channel_names, num_videos, days_back, output_dir=Config().getValue("DEFAULT_OUTPUT_DIR")):
         if type(channel_names) != list:
             raise Exception("channel_names must be a list")
         
@@ -539,7 +538,7 @@ class VideoMaker:
         clipGetter = ClipGetter()
         for user in users:
             print("Getting clips for " + user.display_name)
-            clip = clipGetter.get_popular_clips(user, authenticator.get_client(), youtube_history, days_back=days_back, clip_dir=DEFAULT_CLIP_DIR, clip_count=num_videos * 3 // len(users))
+            clip = clipGetter.get_popular_clips(user, authenticator.get_client(), youtube_history, days_back=days_back, clip_dir=Config().getValue("DEFAULT_CLIP_DIR"), clip_count=num_videos * 3 // len(users))
             clips.extend(clip)
 
         if len(clips) == 0:

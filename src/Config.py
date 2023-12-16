@@ -28,7 +28,8 @@ class Config:
         "USE_LLAMA2": True,
         "FADE_TIME": 1.0,
         "TRANSITION_FADE_TIME": 0.3,
-        "NO_CUT_STREAMERS": []
+        "NO_CUT_STREAMERS": [],
+        "TARGET_CLIP_AMOUNT": 5,
     }
 
     # if the config file doesn't exist create it

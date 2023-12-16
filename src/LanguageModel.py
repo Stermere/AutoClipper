@@ -1,28 +1,35 @@
-# a class that handles the OpenAI API
+# a class that uses either llama2 or the OpenAI API to generate text
 import openai
 import json
-
-
-with open('config.json') as f:
-    config = json.load(f)
-
-API_KEY = config['OPENAI_API_KEY']
-DEFAULT_MODEL = config['DEFAULT_MODEL']
+import time
+from src.Config import Config
 
 # define the system message
 SYSTEM_MESSAGE = {"role": "system", "content": "You are a Youtube video editor assistant. You must complete the task layed out by your user."}
 
 class LanguageModel:
-    def __init__(self, api_key=API_KEY):
-        openai.api_key = api_key
+    def __init__(self):
+        self.config = Config()
+        openai.api_key = self.config.getValue("OPENAI_API_KEY")
+        self.use_openai = self.config.getValue("USE_OPENAI")
+        self.use_llama2 = self.config.getValue("USE_LLAMA2")
+
+        if not self.use_llama2 or not self.use_openai:
+            print("WARNING: No language models are enabled. Please enable one in the config file.")
+            quit(1)
 
     # given a prompt return the response
-    def get_response(self, prompt, allow_reprompt=False, max_tokens=300, model=DEFAULT_MODEL):
+    def get_response(self, prompt, allow_reprompt=False, max_tokens=300, model=Config().getValue("DEFAULT_MODEL")):
         # create the message list
         chats = [SYSTEM_MESSAGE, {"role": "user", "content": prompt}]
         while True:
             try:
-                completion = openai.ChatCompletion.create(model=model, messages=chats, max_tokens=max_tokens)
+                if self.use_openai:
+                    completion = openai.ChatCompletion.create(model=model, messages=chats, max_tokens=max_tokens)
+                elif self.use_llama2:
+                    pass
+
+
                 if not allow_reprompt:
                     break
 
@@ -37,7 +44,8 @@ class LanguageModel:
                 chats.append({"role": "user", "content": prompt})
 
             except (openai.error.RateLimitError, openai.error.ServiceUnavailableError) as e:
-                input("OpenAI be struggling. Press enter to try again. (wait a few minutes if this keeps happening!)")
+                print("OpenAI be struggling. trying again in a minute...")
+                time.sleep(60)
                 
         return completion.choices[0].message.content
     
@@ -148,18 +156,25 @@ class LanguageModel:
         with open("src/prompts/FilterClips.txt") as f:
             prompt = f.readlines()
         prompt = ''.join(prompt)
-        prompt = self.fill_prompt(prompt, ''.join(responses), str(num_returned))
+        prompt = self.fill_prompt(prompt, ''.join(responses), str(min(len(clips), num_returned)), str([i for i in range(len(clips))]))
         response = self.get_response(prompt, max_tokens=600, model="gpt-3.5-turbo-16k")
 
         print(response + "\n")
 
         input("Press enter to continue...")
 
-        # parse the response (note this could be bad if the user is allowed to reprompt)
-        response = response.split('(')[-1].split(')')[0]
-        output = list(eval(response))
+        # parse the response
+        response = [r.split(']')[0] for r in response.split('[')][1]
 
-        return [clips[int(i)] for i in output]
+        # convert the response to a list of clip numbers
+        new_order = []
+        for r in response.split(','):
+            try:
+                new_order.append(int(r))
+            except ValueError:
+                pass
+
+        return [clips[i] for i in new_order]
 
 
 if __name__ == "__main__":

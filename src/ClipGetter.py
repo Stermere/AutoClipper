@@ -6,13 +6,12 @@ import re
 from datetime import timezone
 from src.ClipCompiler import ClipCompiler
 from src.Clip import Clip
-
-DEFAULT_SAVE_DIR = 'temp/clips'
+from src.Config import Config
 
 # handles getting and downloading clips
 class ClipGetter:
     # takes a clip and a user object and downloads the clip to the clips folder
-    def download_clip(self, clip, user, clip_dir=DEFAULT_SAVE_DIR):
+    def download_clip(self, clip, user, clip_dir=Config().getValue('DEFAULT_CLIP_DIR')):
         if (clip == None):
             print('Clip is None')
             return None
@@ -41,7 +40,7 @@ class ClipGetter:
 
 
     # get the most popular clips from a streamer and download them. designed to be used when making compilation videos
-    def get_clips_from_stream(self, user, client, clip_dir=DEFAULT_SAVE_DIR, clip_count=15, vods_back=0):
+    def get_clips_from_stream(self, user, client, clip_dir=Config().getValue('DEFAULT_CLIP_DIR'), clip_count=15, vods_back=0):
         # get the video id's of the streams that occured in the last streams streams
         videos = client.get_videos(user_id=user.id)
 
@@ -105,7 +104,7 @@ class ClipGetter:
         return clips
     
     # get the most popular clip from a streamer that is not in the provided history. designed to be used when making single clip videos
-    def get_popular_clips(self, user, client, history, days_back=2, clip_dir=DEFAULT_SAVE_DIR, clip_count=1):
+    def get_popular_clips(self, user, client, history, days_back=2, clip_dir=Config().getValue('DEFAULT_CLIP_DIR'), clip_count=1):
         # get clips that have the highest view count from the last days_back days
         clips = client.get_clips(user.id, started_at=(datetime.datetime.now().astimezone() - datetime.timedelta(days=days_back)).isoformat(), page_size=50)
 
