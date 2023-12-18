@@ -7,6 +7,7 @@ from datetime import timezone
 from src.ClipCompiler import ClipCompiler
 from src.Clip import Clip
 from src.Config import Config
+from src.UserInput import get_int
 
 # handles getting and downloading clips
 class ClipGetter:
@@ -63,14 +64,14 @@ class ClipGetter:
         print(f'Video duration: {video_duration}')
 
         # the start time for getting clips should be the origin of the video
-        start_time = (self.parse_date_time(video_created_at) - (video_duration + datetime.timedelta(hours=2)))
+        start_time = (self.parse_date_time(video_created_at) - (video_duration + datetime.timedelta(hours=2))).astimezone()
 
         # get clips from this user's streams in the time after the stream started
         clips = await authenticator.get_clips(user.id, started_at=start_time)
 
         # filter to only include clips that are from the most recent stream
         clips_temp = []
-        for i in range(len(clips)):
+        for i in range(min(len(clips), clip_count)):
             # if vod offset is none then the video is not up or to recent
             # so fall back to time based filtering
             if clips[i].vod_offset == None:
@@ -88,6 +89,9 @@ class ClipGetter:
 
         print(f'Found {min(len(clips), clip_count)} clips for {user.display_name}\'s stream ({video_id}) looking back to {start_time}')
 
+        # get user input 
+        clip_count = get_int("How many clips would you like to use?", 1, min(len(clips), clip_count))
+
         # print how long its been since the stream started
         print(f'Time since stream ended: {(datetime.datetime.now().astimezone() - start_time.astimezone()).total_seconds() / 60 / 60:.2f} hours')
 
@@ -102,6 +106,7 @@ class ClipGetter:
             clips_temp.append(Clip.from_twitch_api_clip(clip, dir_))
         clips = clips_temp
 
+        print("\nClips downloaded...\n")
 
         # combine any overlapping clips
         #clip_compiler = ClipCompiler()

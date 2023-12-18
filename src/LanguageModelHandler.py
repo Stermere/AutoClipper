@@ -40,7 +40,7 @@ class LanguageModelHandler:
 
                 chats.append({"role": "assistant", "content": completion})
 
-                print(completion.choices[0].message.content + "\n")
+                print(completion + "\n")
 
                 # ask the user for a reprompt
                 prompt = input("Enter a reprompt (n or nothing to quit): ")
@@ -52,7 +52,7 @@ class LanguageModelHandler:
                 print("OpenAI be struggling. trying again in a minute...")
                 time.sleep(60)
                 
-        return completion.choices[0].message.content
+        return completion
     
     # given a prompt with {}'s in it fill them with the args passed in
     def fill_prompt(self, prompt, *args):
@@ -151,9 +151,6 @@ class LanguageModelHandler:
             prompt = ''.join(prompt)
             prompt = self.fill_prompt(prompt, clip.title, clip.transcript)
             responses.append(self.get_response(prompt))
-
-        for r in responses:
-            print(r + "\n") 
 
         # convert the responses to a string with the clip numbers
         responses = [f"Clip {i} - {responses[i].replace('(', '').replace(')', '')} - Transcript: {clips[i].transcript} \n\n" for i in range(len(responses))]

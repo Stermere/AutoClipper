@@ -4,11 +4,10 @@ import os
 from transformers import LlamaForCausalLM, LlamaTokenizer
 
 class LlamaWrapper:
-    def __init__(self, model_path="llama\llama-2-13b-chat"):
+    def __init__(self, model_path="Llama-2-7b-chat-hf"):
         # check if the model path exists
         if not os.path.isdir(model_path):
             raise Exception(f"Model path {model_path} does not exist! Please download the model before using Llama")
-
 
         self.model = LlamaForCausalLM.from_pretrained(model_path)
         self.tokenizer = LlamaTokenizer.from_pretrained(model_path)
@@ -17,21 +16,19 @@ class LlamaWrapper:
             model=self.model,
             tokenizer=self.tokenizer,
             torch_dtype=torch.float16,
-            device_map="auto",
+            device="cpu",
         )
 
-    def generate(self, prompt, max_length=300):
+    def generate(self, prompt, max_length=1000):
         sequences = self.pipeline(
             prompt,
             do_sample=True,
             top_k=10,
             num_return_sequences=1,
             eos_token_id=self.tokenizer.eos_token_id,
-            max_length=max_length,
+            return_full_text = False,
+            max_new_tokens = max_length,
         )
-
-        # TODO remove this
-        for seq in sequences:
-            print(f"{seq['generated_text']}")
+        print(sequences[0]['generated_text'])
 
         return sequences[0]['generated_text']

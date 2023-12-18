@@ -8,7 +8,7 @@ from src.TwitchAuthenticator import TwitchAuthenticator
 from src.LanguageModelHandler import LanguageModelHandler
 from src.YoutubeUploader import YoutubeUploader
 from src.CutFinder import find_cut_point
-from src.UserInput import get_int, get_bool
+from src.UserInput import get_bool
 from src.YoutubeHistory import YoutubeHistory
 from src.Config import Config
 import datetime
@@ -55,7 +55,7 @@ class VideoMaker:
         self.uploaded_videos = YoutubeHistory()
 
         # used to get the title, description, and tags using a LLM and a more advanced transcription
-        self.chat_llm = LanguageModelHandler()
+        self.chat_llm = None # init once the whisper model is done transcribing
 
         # creator specific settings
         self.cut_adjustment = 0.0 # the amount of time to add to the cut point
@@ -77,6 +77,9 @@ class VideoMaker:
 
         # populate the clips transcript
         self.get_clip_data()
+
+        # init the LLM
+        self.chat_llm = LanguageModelHandler()
 
         self.clips = self.chat_llm.filter_out_clips(self.clips, self.config.getValue("TARGET_CLIP_AMOUNT"))
 
@@ -292,6 +295,7 @@ class VideoMaker:
             temp_clips.append(clip)
 
         self.clips = temp_clips
+        del audio_to_text
 
         return text_times, transcriptions, titles, durations
     
@@ -418,7 +422,7 @@ class VideoMaker:
         
         video = self.authenticator.get_videos_from_ids([clip.video_id])
         if len(video) == 0:
-            return None
+            return "VOD got deleted :("
         
         video = video[0]
         minutes = clip.vod_offset // 60
@@ -480,12 +484,6 @@ class VideoMaker:
         if len(clips) == 0:
             print("No clips found")
             return False
-
-        print("\nClips downloaded...\n")
-
-        # get user input 
-        clip_count = get_int("How many clips would you like to use?", 1, len(clips))
-        clips = clips[:clip_count]
         
         # have the user evaluate the clips
         #temp_clips = []
