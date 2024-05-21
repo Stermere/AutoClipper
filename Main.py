@@ -12,8 +12,20 @@ with open('config.json') as f:
     config = json.load(f)
 
 DEFAULT_CLIP_DIR = config['DEFAULT_CLIP_DIR']
+HELP_MENU = 'Usage: python3 Main.py <task>\n\
+                <task> can be one of the following:\n\
+                -v render a video\n\
+                -mv schedule multiple short videos\n\
+                -r register with the youtube api\n\
+                -clean delete all clips in the clip directory\n\
+                --h: help menu (this menu)'
 
 def main():
+    # help menu
+    if len(sys.argv) == 1:
+        print(HELP_MENU)
+        exit(0)
+
     # make a clip compilation
     if sys.argv[1] == '-v':
         # check for the second arg for the streamer name
@@ -51,13 +63,7 @@ def main():
         uploader = YoutubeUploader()
 
     else:
-        print('Usage: python3 Main.py <task>\n\
-                <task> can be one of the following:\n\
-                -v render a video\n\
-                -mv schedule multiple short videos\n\
-                -r register with the youtube api\n\
-                -clean delete all clips in the clip directory\n\
-                --h: help menu (this menu)')
+        print(HELP_MENU)
 
 
 if __name__ == '__main__':
