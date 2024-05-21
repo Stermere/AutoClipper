@@ -475,11 +475,11 @@ class VideoMaker:
             print("Could not find user " + channel_name)
             return False
 
-        clipGetter = ClipGetter()
+        clipGetter = ClipGetter(authenticator)
 
         print("Getting clips for " + users[0].display_name)
 
-        clips = await clipGetter.get_clips_from_stream(users[0], authenticator, clip_dir=Config().getValue("DEFAULT_CLIP_DIR"), clip_count=clip_count, vods_back=vods_back)
+        clips = await clipGetter.get_clips_from_stream(users[0], clip_dir=Config().getValue("DEFAULT_CLIP_DIR"), clip_count=clip_count, vods_back=vods_back)
 
         if len(clips) == 0:
             print("No clips found")
@@ -533,10 +533,10 @@ class VideoMaker:
 
         # get the clips
         clips = []
-        clipGetter = ClipGetter()
+        clipGetter = ClipGetter(authenticator)
         for user in users:
             print("Getting clips for " + user.display_name)
-            clip = clipGetter.get_popular_clips(user, authenticator.get_client(), youtube_history, days_back=days_back, clip_dir=Config().getValue("DEFAULT_CLIP_DIR"), clip_count=num_videos * 3 // len(users))
+            clip = clipGetter.get_popular_clips(user, youtube_history, days_back=days_back, clip_dir=Config().getValue("DEFAULT_CLIP_DIR"), clip_count=num_videos * 3 // len(users))
             clips.extend(clip)
 
         if len(clips) == 0:

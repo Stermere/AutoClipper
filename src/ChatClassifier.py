@@ -231,6 +231,8 @@ class ChatClassifier:
         # authenticate the bot
         await self.authenticator.authenticate()
 
+        self.clip_getter.set_authenticator(self.authenticator)
+
         # get user ids
         self.users = self.authenticator.get_users_from_names(TARGET_CHANNELS)
 

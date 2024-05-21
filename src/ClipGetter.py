@@ -11,6 +11,12 @@ from src.UserInput import get_int
 
 # handles getting and downloading clips
 class ClipGetter:
+    def __init__(self, authenticator):
+        self.authenticator = authenticator
+
+    def set_authenticator(self, authenticator):
+        self.authenticator = authenticator
+
     # takes a clip and a user object and downloads the clip to the clips folder
     def download_clip(self, clip, user, clip_dir=Config().getValue('DEFAULT_CLIP_DIR')):
         if (clip == None):
@@ -47,7 +53,7 @@ class ClipGetter:
         return datetime.datetime.fromisoformat(date_time_str)
 
     # get the most popular clips from a streamer and download them. designed to be used when making compilation videos
-    async def get_clips_from_stream(self, user, authenticator, clip_dir=Config().getValue('DEFAULT_CLIP_DIR'), clip_count=15, vods_back=0):
+    async def get_clips_from_stream(self, user, clip_dir=Config().getValue('DEFAULT_CLIP_DIR'), clip_count=15, vods_back=0):
         # get the video id's of the streams that occured in the last streams streams
         videos = user.videos()
 
@@ -67,7 +73,7 @@ class ClipGetter:
         start_time = (self.parse_date_time(video_created_at) - (video_duration + datetime.timedelta(hours=2))).astimezone()
 
         # get clips from this user's streams in the time after the stream started
-        clips = await authenticator.get_clips(user.id, started_at=start_time)
+        clips = await self.authenticator.get_clips(user.id, started_at=start_time)
 
         # filter to only include clips that are from the most recent stream
         clips_temp = []
@@ -116,9 +122,9 @@ class ClipGetter:
         return clips
     
     # get the most popular clip from a streamer that is not in the provided history. designed to be used when making single clip videos
-    def get_popular_clips(self, user, client, history, days_back=2, clip_dir=Config().getValue('DEFAULT_CLIP_DIR'), clip_count=1):
+    def get_popular_clips(self, user, history, days_back=2, clip_dir=Config().getValue('DEFAULT_CLIP_DIR'), clip_count=1):
         # get clips that have the highest view count from the last days_back days
-        clips = client.get_clips(user.id, started_at=(datetime.datetime.now().astimezone() - datetime.timedelta(days=days_back)).isoformat(), page_size=50)
+        clips = self.authenticator.client.get_clips(user.id, started_at=(datetime.datetime.now().astimezone() - datetime.timedelta(days=days_back)).isoformat(), page_size=50)
 
         # filter out clips that are in the history
         clips_temp = []
@@ -148,5 +154,3 @@ class ClipGetter:
         clips = clips_temp
 
         return clips
-
-        
